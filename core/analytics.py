@@ -8,7 +8,7 @@ import pandas as pd
 
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 MA_DAYS = 14             # forecast = average lb/day over the last 14 days
-MARKDOWN_WINDOW_H = 24   # only mark down lots with 24 h or less of freshness left
+MARKDOWN_SHELF_SHARE = 0.5  # only mark down lots with half or less of their shelf life left
 RESTOCK_COVER_DAYS = 2   # perishable stock: buy only enough for 2 days of demand
 
 
@@ -43,9 +43,10 @@ def product_table(catalog, sales, inventory, as_of):
     t["margin_30d"] = (t["revenue_30d"] - lbs_30 * t["unit_cost"]).round(0)
     t["margin_pct"] = (t["margin_30d"] / t["revenue_30d"].replace(0, np.nan) * 100).round(0)
 
-    age_h = (as_of - t["caught_at"]).dt.total_seconds() / 3600
+    # A lot with no catch time (e.g. stock just added in the app) is treated as fresh
+    age_h = ((as_of - t["caught_at"]).dt.total_seconds() / 3600).fillna(0)
     hours_left = (t["shelf_life_h"] - age_h).clip(lower=0)
-    t["hours_left"] = hours_left.where(t["stock_lbs"] > 0, 0).fillna(0).round(0)
+    t["hours_left"] = hours_left.where(t["stock_lbs"] > 0, 0).round(0)
     t["expected_sales_lbs"] = (recent * t["hours_left"] / 24).round(1)
     t["at_risk_lbs"] = (t["stock_lbs"] - t["expected_sales_lbs"]).clip(lower=0).round(1)
     t["days_of_cover"] = (t["stock_lbs"] / recent.replace(0, np.nan)).round(1)
@@ -65,7 +66,7 @@ def _action(r):
         return ("Restock", r.list_price, qty,
                 f"Out of stock. Sells {r.avg_daily_lbs} lb/day (14-day average), "
                 f"so buy {qty} lb to cover {RESTOCK_COVER_DAYS} days.")
-    if r.hours_left <= MARKDOWN_WINDOW_H and r.at_risk_lbs > 0:
+    if r.hours_left <= r.shelf_life_h * MARKDOWN_SHELF_SHARE and r.at_risk_lbs > 0:
         pct = 0.15 if r.at_risk_lbs / r.stock_lbs > 0.4 else 0.10
         price = max(r.floor_price, round(r.list_price * (1 - pct)))
         return ("Mark down", price, 0,

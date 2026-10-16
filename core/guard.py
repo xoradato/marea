@@ -7,12 +7,18 @@ import unicodedata
 from dataclasses import dataclass, field
 
 NUM = r"(\d+(?:[.,]\d+)?)"
+NUMBER_WORDS = {
+    "media": 0.5, "un": 1, "una": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
+    "seis": 6, "siete": 7, "ocho": 8, "nueve": 9, "diez": 10, "once": 11, "doce": 12,
+    "quince": 15, "veinte": 20, "treinta": 30, "cuarenta": 40, "cincuenta": 50,
+}
 QTY_RE = re.compile(rf"{NUM}\s*(?:lbs?|libras?)\b")
+QTY_WORD_RE = re.compile(rf"\b({'|'.join(NUMBER_WORDS)})\s+(?:lbs?|libras?)\b")  # "diez libras"
 PRICE_RES = [
     re.compile(rf"\b(?:l|lps?)\.?\s*{NUM}"),                          # "L 60", "Lps. 60"
     re.compile(rf"{NUM}\s*(?:lempiras?|lps?)\b"),                     # "60 lempiras"
     re.compile(rf"\b(?:a|en|por)\s+{NUM}\b(?!\s*(?:lbs?|libras?))"),  # "a 60", "en 800"
-    re.compile(rf"\b(?:doy|pago|ofrezco)\s+{NUM}\b(?!\s*(?:lbs?|libras?))"),  # "te doy 600"
+    re.compile(rf"\b(?:doy|pago|ofrezco)\s+{NUM}\b(?!\s*(?:lbs?|libras?))"),  # "le doy 600"
 ]
 DELIVERY_WORDS = ("llev", "entreg", "envi", "domicilio", "mand", "traer", "traig")
 FRESHNESS_BUFFER_H = 6  # the lot must still be fresh 6 h after delivery
@@ -53,6 +59,8 @@ def check_message(text, table, settings):
     m = QTY_RE.search(t)
     if m:
         c.qty_lbs = _to_float(m.group(1))
+    elif m := QTY_WORD_RE.search(t):
+        c.qty_lbs = NUMBER_WORDS[m.group(1)]
 
     price_matches = [m for rx in PRICE_RES for m in rx.finditer(t)]
     if price_matches:
@@ -68,10 +76,10 @@ def check_message(text, table, settings):
 
     if "pasado manana" in t:
         c.when_h = 48
+    elif re.search(r"\bhoy\b", t):  # "hoy en la mañana" means today
+        c.when_h = 0
     elif "manana" in t:
         c.when_h = 24
-    elif "hoy" in t:
-        c.when_h = 0
 
     c.flags = _flags(c, rows, settings)
     return c

@@ -22,6 +22,7 @@ EXAMPLES = [
     "¿A cómo la jaiba? Quiero 20 libras.",
     "Necesito 40 libras de róbalo, ¿me lo puede llevar a San Pedro Sula el sábado? ¿Me da factura?",
 ]
+EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs"]
 
 
 @st.cache_data
@@ -33,8 +34,8 @@ catalog, sales, inventory, settings = load()
 as_of = pd.Timestamp(settings["as_of"])
 names = dict(zip(catalog["product_id"], catalog["name"]))
 
-if "drafts" not in st.session_state:
-    st.session_state.drafts = 0
+if "log" not in st.session_state:
+    st.session_state.log = []
 
 with st.sidebar:
     st.title("🐟 Marea")
@@ -53,9 +54,30 @@ with st.sidebar:
     metrics_box = st.container()
     st.caption("Assumption-based estimate, not a measurement. All data is synthetic.")
 
-table = analytics.product_table(catalog, sales, inventory, as_of)
+tab_reply, tab_dash, tab_recs, tab_setup = st.tabs(
+    ["1 · Reply to a buyer", "2 · Dashboard", "3 · What to do today", "⚙ Your catalog"])
 
-tab_reply, tab_dash, tab_recs = st.tabs(["1 · Reply to a buyer", "2 · Dashboard", "3 · What to do today"])
+# Rendered last in the tab bar, but runs first so every tab uses the edited values
+with tab_setup:
+    st.write("Your prices, floor prices and stock. Edit any cell; changes apply to this session only.")
+    current = catalog.merge(inventory[["product_id", "stock_lbs"]], on="product_id")
+    edited = st.data_editor(
+        current[["product_id", "name"] + EDITABLE],
+        hide_index=True,
+        disabled=["product_id", "name"],
+        column_config={c: st.column_config.NumberColumn(min_value=0) for c in EDITABLE},
+        key="catalog_editor",
+    )
+    for _, r in edited[edited["floor_price"] > edited["list_price"]].iterrows():
+        st.warning(f"{r['name']}: floor price is above list price.")
+    zones = ", ".join(f"{z} (L {fee})" for z, fee in settings["delivery_zones"].items())
+    st.markdown(f"**Delivery zones:** {zones}  \n**Delivery hours:** {settings['delivery_hours']}  \n"
+                f"**Minimum order:** {settings['min_order_lbs']} lb  \n**Reply tone:** {settings['tone']}")
+
+e = edited.set_index("product_id")
+catalog = catalog.assign(**{c: catalog["product_id"].map(e[c]) for c in ["list_price", "floor_price", "unit_cost"]})
+inventory = inventory.assign(stock_lbs=inventory["product_id"].map(e["stock_lbs"]))
+table = analytics.product_table(catalog, sales, inventory, as_of)
 
 with tab_reply:
     pick = st.selectbox("Example buyer message (synthetic)", EXAMPLES)
@@ -67,8 +89,13 @@ with tab_reply:
             check = guard.check_message(msg, table, settings)
             with st.spinner("Drafting on AMD..."):
                 draft = copilot.draft_reply(msg, check, table, settings)
-            st.session_state.drafts += 1
             st.session_state.last = (check, draft)
+            st.session_state.log.append({
+                "message": msg if len(msg) <= 70 else msg[:67] + "...",
+                "decide_tu": bool(check.flags or draft.review),
+                "reasons": ", ".join(code for code, _ in check.flags) + (" REVIEW" if draft.review else ""),
+                "source": draft.source,
+            })
 
     if "last" in st.session_state:
         check, draft = st.session_state.last
@@ -95,6 +122,10 @@ with tab_reply:
             st.caption(f"Source: {draft.source}" + (f" · {draft.seconds:.1f} s" if draft.seconds else ""))
             if draft.error:
                 st.warning(f"Model call failed, showing a template instead: {draft.error}")
+
+    if st.session_state.log:
+        st.subheader("Messages handled this session")
+        st.dataframe(pd.DataFrame(st.session_state.log[::-1]), hide_index=True)
 
 with tab_dash:
     revenue = table["revenue_30d"].sum()
@@ -126,8 +157,11 @@ with tab_recs:
             st.warning(f"Model call failed, showing rule output instead: {recs.error}")
 
 with metrics_box:
-    saved_min = st.session_state.drafts * max(manual_s - review_s, 0) / 60
-    st.metric("Replies drafted", st.session_state.drafts)
-    st.metric("Estimated time saved", f"{saved_min:.1f} min")
+    drafted = len(st.session_state.log)
+    st.metric("Replies drafted", drafted)
+    st.metric("Estimated time saved", f"{drafted * max(manual_s - review_s, 0) / 60:.1f} min")
 
-st.caption("Demo with synthetic data. Language model inference runs on AMD GPUs via AMD Token Factory.")
+if llm.is_configured():
+    st.caption("Demo with synthetic data. Language model inference runs on AMD GPUs via AMD Token Factory.")
+else:
+    st.caption("Demo with synthetic data. AMD model not connected yet: showing offline templates.")

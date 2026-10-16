@@ -2,6 +2,8 @@
 
 Sales copilot for small-scale fish and seafood sellers in Honduras who sell through WhatsApp and Facebook Marketplace.
 
+**Live demo:** https://marea-copilot.streamlit.app/
+
 > Draft README. To be finished before submission.
 
 ## What it does
@@ -15,7 +17,7 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 - Demand forecast: 14-day moving average of pounds sold per day.
 - Expected sales before spoiling = avg lb/day × hours of freshness left ÷ 24.
 - At risk = stock − expected sales before spoiling.
-- Mark down when ≤ 24 h of freshness left and stock is at risk: 10% off, or 15% if more than 40% of the lot is at risk. Never below the seller's floor price.
+- Mark down when a lot has half or less of its shelf life left and stock is at risk: 10% off, or 15% if more than 40% of the lot is at risk. Never below the seller's floor price.
 - Restock to cover 2 days of demand.
 
 ## Where AMD runs
