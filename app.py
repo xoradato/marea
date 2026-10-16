@@ -67,9 +67,7 @@ names = dict(zip(catalog["product_id"], catalog["name"]))
 if "log" not in st.session_state:
     st.session_state.log = []
 
-ui.hero(llm.is_configured(),
-        f"Model on AMD: {llm.model_name()}" if llm.is_configured() else "AMD model not connected: offline templates",
-        f"Seller: {settings['business_name']}")
+ui.header(llm.is_configured(), llm.model_name(), settings["business_name"])
 
 with st.sidebar:
     st.subheader(":material/tune: Controls")
@@ -185,7 +183,7 @@ with tab_dash:
                 f"{table['at_risk_lbs'].sum():.0f} lb")
     k[3].metric("Products needing action", int((table["action"] != "OK").sum()))
     st.subheader("Daily revenue, last 30 days")
-    st.area_chart(analytics.daily_revenue(sales), color="#0F7C8C")
+    st.bar_chart(analytics.daily_revenue(sales), color="#0C6E7A")
     st.subheader("Lots on ice")
     st.dataframe(
         table[
