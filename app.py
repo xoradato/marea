@@ -27,15 +27,21 @@ EXAMPLES = [
 EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs"]
 
 
+def files_version():
+    """Changes when data, rules or test cases change, so a redeploy never serves stale cached results."""
+    root = analytics.DATA_DIR.parent
+    return max(p.stat().st_mtime for d in ("data", "core", "tests") for p in (root / d).glob("*.*"))
+
+
 @st.cache_data
-def load():
+def load(version):
     return analytics.load_data()
 
 
 @st.cache_data
-def parser_benchmark():
+def parser_benchmark(version):
     """Scored on the shipped synthetic data, not on the seller's edits or the simulated clock."""
-    catalog, sales, inventory, settings = load()
+    catalog, sales, inventory, settings = load(version)
     base = analytics.product_table(catalog, sales, inventory, pd.Timestamp(settings["as_of"]))
     return pd.DataFrame(benchmark.run(base, settings))
 
@@ -52,7 +58,8 @@ def describe_items(check):
     return "; ".join(parts) or "no product"
 
 
-catalog, sales, inventory, settings = load()
+FILES_VERSION = files_version()
+catalog, sales, inventory, settings = load(FILES_VERSION)
 as_of = pd.Timestamp(settings["as_of"])
 names = dict(zip(catalog["product_id"], catalog["name"]))
 
@@ -100,7 +107,7 @@ with tab_setup:
     st.markdown(f"**Delivery zones:** {zones}  \n**Delivery hours:** {settings['delivery_hours']}  \n"
                 f"**Minimum order:** {settings['min_order_lbs']} lb  \n**Reply tone:** {settings['tone']}")
     with st.expander("Parser benchmark: how well the rules read buyer messages"):
-        bench = parser_benchmark()
+        bench = parser_benchmark(FILES_VERSION)
         st.metric("Synthetic messages parsed correctly", f"{int(bench['ok'].sum())}/{len(bench)}")
         for _, r in bench[~bench["ok"]].iterrows():
             st.markdown(f"- ❌ *{r['message']}*  \n  {r['problems']}")
