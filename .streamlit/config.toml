@@ -1,7 +1,22 @@
 [theme]
 base = "light"
-primaryColor = "#0E7C86"
-backgroundColor = "#F7FAFB"
-secondaryBackgroundColor = "#E3EFF1"
-textColor = "#10242B"
-font = "sans serif"
+primaryColor = "#0F7C8C"
+backgroundColor = "#FBF7F0"
+secondaryBackgroundColor = "#F1E8D8"
+textColor = "#13293D"
+borderColor = "#E4D8C3"
+linkColor = "#0F7C8C"
+redColor = "#E4572E"
+greenColor = "#1B998B"
+baseRadius = "large"
+font = "Nunito Sans:https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@400;600;700&display=swap"
+headingFont = "Nunito:https://fonts.googleapis.com/css2?family=Nunito:wght@700;800&display=swap"
+dataframeHeaderBackgroundColor = "#E6F2F1"
+chartCategoricalColors = ["#0F7C8C", "#F2A541", "#E4572E", "#3D5A80", "#98C1D9"]
+
+[theme.sidebar]
+backgroundColor = "#0B3C5D"
+secondaryBackgroundColor = "#12507A"
+textColor = "#EAF4F4"
+primaryColor = "#7FD1C7"
+borderColor = "#1E6A8F"

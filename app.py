@@ -4,9 +4,10 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import analytics, benchmark, copilot, guard, llm
+from core import analytics, benchmark, copilot, guard, llm, ui
 
-st.set_page_config(page_title="Marea", page_icon="🐟", layout="wide")
+st.set_page_config(page_title="Marea", page_icon="🌊", layout="wide")
+ui.inject_css()
 
 # On Streamlit Cloud the key lives in Secrets; locally, export the env vars from .env
 try:
@@ -66,14 +67,11 @@ names = dict(zip(catalog["product_id"], catalog["name"]))
 if "log" not in st.session_state:
     st.session_state.log = []
 
+ui.hero(f"🟢 Model on AMD: {llm.model_name()}" if llm.is_configured() else "⚪ AMD model not connected: offline templates",
+        f"Seller: {settings['business_name']}")
+
 with st.sidebar:
-    st.title("🐟 Marea")
-    st.caption("Sales copilot for small-scale fish sellers")
-    if llm.is_configured():
-        st.success(f"Model on AMD: {llm.model_name()}")
-    else:
-        st.warning("No AMD API key set. Using offline templates.")
-    st.caption(f"Seller: {settings['business_name']}")
+    st.subheader("🧭 Controls")
     hours_ahead = st.slider("Simulate time: hours from now", 0, 36, 0, step=3,
                             help="Stock sells at the 14-day average and every lot ages. No restocking.")
     st.caption(f"Demo clock: {as_of + pd.Timedelta(hours=hours_ahead):%a %d %b %Y, %H:%M}"
@@ -81,14 +79,14 @@ with st.sidebar:
     settings["closed_season"] = st.multiselect(
         "Closed season (set by you)", list(names), format_func=names.get)
     st.divider()
-    st.subheader("Time saved (estimate)")
+    st.subheader("⏱️ Time saved (estimate)")
     manual_s = st.number_input("Seconds to write a reply by hand", 10, 600, 90)
     review_s = st.number_input("Seconds to review a draft", 5, 300, 15)
     metrics_box = st.container()
     st.caption("Assumption-based estimate, not a measurement. All data is synthetic.")
 
 tab_reply, tab_dash, tab_recs, tab_setup = st.tabs(
-    ["1 · Reply to a buyer", "2 · Dashboard", "3 · What to do today", "⚙ Your catalog"])
+    ["💬 Reply to a buyer", "📊 Dashboard", "🧭 What to do today", "⚙️ Your catalog"])
 
 # Rendered last in the tab bar, but runs first so every tab uses the edited values
 with tab_setup:
@@ -143,13 +141,10 @@ with tab_reply:
         left, right = st.columns(2)
         with left:
             if check.flags or draft.review:
-                st.error("**DECIDE TÚ**: this one needs you before sending.")
-                for _, m in check.flags:
-                    st.write(f"• {m}")
-                if draft.review:
-                    st.write("• The model marked this request as unusual.")
+                ui.decide_card([m for _, m in check.flags]
+                               + (["The model marked this request as unusual."] if draft.review else []))
             else:
-                st.success("No rule triggered. Read it and send.")
+                ui.safe_card()
             st.caption(
                 f"Parsed by rules: {describe_items(check)} · zone={check.zone or 'n/a'} · "
                 f"when={'n/a' if check.when_h is None else f'~{check.when_h} h'}")
@@ -189,16 +184,40 @@ with tab_dash:
                 f"L {table['value_at_risk'].sum():,.0f} at cost", delta_color="off")
     k[3].metric("Products needing action", int((table["action"] != "OK").sum()))
     st.subheader("Daily revenue, last 30 days")
-    st.line_chart(analytics.daily_revenue(sales))
-    st.subheader("Products")
-    st.dataframe(table[["name", "stock_lbs", "hours_left", "avg_daily_lbs", "trend_pct", "at_risk_lbs",
-                        "days_of_cover", "margin_pct", "action"]], hide_index=True)
+    st.area_chart(analytics.daily_revenue(sales), color="#0F7C8C")
+    st.subheader("Lots on ice")
+    st.dataframe(
+        table.assign(action=table["action"].map(ui.ACTION_LABELS))[
+            ["name", "stock_lbs", "hours_left", "avg_daily_lbs", "trend_pct", "at_risk_lbs",
+             "days_of_cover", "margin_pct", "action"]],
+        hide_index=True,
+        column_config={
+            "name": "Product",
+            "stock_lbs": st.column_config.NumberColumn("Stock", format="%.1f lb"),
+            "hours_left": st.column_config.ProgressColumn("Freshness left", min_value=0, max_value=72, format="%d h"),
+            "avg_daily_lbs": st.column_config.NumberColumn("Sells / day", format="%.1f lb"),
+            "trend_pct": st.column_config.NumberColumn("Trend", format="%+d%%"),
+            "at_risk_lbs": st.column_config.NumberColumn("At risk", format="%.1f lb"),
+            "days_of_cover": st.column_config.NumberColumn("Days of stock", format="%.1f"),
+            "margin_pct": st.column_config.NumberColumn("Margin", format="%d%%"),
+            "action": "Action",
+        })
     st.caption("Computed with pandas, no LLM. Forecast = 14-day moving average of lb sold per day. "
                "At risk = stock − (avg lb/day × hours of freshness left ÷ 24).")
 
 with tab_recs:
     st.write("Actions come from fixed rules in code. The model on AMD only explains them in plain words.")
-    st.dataframe(table[["name", "action", "suggested_price", "reorder_lbs", "reason"]], hide_index=True)
+    st.dataframe(
+        table.assign(action=table["action"].map(ui.ACTION_LABELS))[
+            ["name", "action", "suggested_price", "reorder_lbs", "reason"]],
+        hide_index=True,
+        column_config={
+            "name": "Product",
+            "action": "Action",
+            "suggested_price": st.column_config.NumberColumn("Price today", format="L %d"),
+            "reorder_lbs": st.column_config.NumberColumn("Buy", format="%d lb"),
+            "reason": st.column_config.TextColumn("Why (rule)", width="large"),
+        })
     if st.button("Explain with AI"):
         with st.spinner("Asking the model on AMD..."):
             st.session_state.recs = copilot.recommendations(table)
