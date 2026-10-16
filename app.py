@@ -161,7 +161,7 @@ with tab_reply:
         deal = analytics.deal_summary(check, table, settings)
         if deal:
             st.markdown("**If you accept as written**")
-            d = st.columns(4)
+            d = st.columns(2) + st.columns(2)
             d[0].metric("Order value", f"L {deal['revenue']:,.0f}")
             d[1].metric("Product cost", f"L {deal['cost']:,.0f}")
             d[2].metric(f"Gross profit ({deal['margin']:.0%} margin)", f"L {deal['profit']:,.0f}")
@@ -178,7 +178,7 @@ with tab_reply:
 with tab_dash:
     revenue = table["revenue_30d"].sum()
     margin = table["margin_30d"].sum()
-    k = st.columns(4)
+    k = st.columns(2) + st.columns(2)  # 2x2 so values never truncate on narrow screens
     k[0].metric("Revenue, last 30 days", f"L {revenue:,.0f}")
     k[1].metric(f"Gross margin ({margin / revenue:.0%})", f"L {margin:,.0f}")
     k[2].metric(f"At risk of spoiling (L {table['value_at_risk'].sum():,.0f} at cost)",
