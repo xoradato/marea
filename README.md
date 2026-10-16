@@ -8,9 +8,9 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 
 ## What it does
 
-1. **Reply to a buyer.** Paste a buyer message. Rules in code check the offer against the seller's floor price, stock, delivery zone and lot freshness. If any rule triggers, the seller sees **DECIDE TÚ** and the draft is a holding reply. Otherwise the model drafts a reply in the seller's tone.
-2. **Dashboard.** Revenue, margin, stock at risk of spoiling, and days of cover, computed with pandas.
-3. **What to do today.** Fixed rules choose the action (mark down, restock). The model only explains the numbers.
+1. **Reply to a buyer.** Paste a buyer message. Rules in code read each product, pounds and offer (also in multi-product orders and "L 1100 for everything" offers) and check them against the seller's floor price, stock, delivery zone and lot freshness. If any rule triggers, the seller sees **DECIDE TÚ** and the draft is a holding reply. Otherwise the model drafts a reply in the seller's tone. Under the draft, the order's value, cost, gross profit and discount vs. list price are computed with code.
+2. **Dashboard.** Revenue, margin, stock at risk of spoiling (in pounds and lempiras at cost), and days of cover, computed with pandas. A time slider simulates the next 36 hours: stock sells at the 14-day average and lots age, so you can see when markdowns start and when a lot must be discarded.
+3. **What to do today.** Fixed rules choose the action (mark down, restock, discard). The model only explains the numbers.
 
 ## How the numbers are calculated (no LLM)
 
@@ -19,12 +19,13 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 - At risk = stock − expected sales before spoiling.
 - Mark down when a lot has half or less of its shelf life left and stock is at risk: 10% off, or 15% if more than 40% of the lot is at risk. Never below the seller's floor price.
 - Restock to cover 2 days of demand.
+- Discard when a lot is past its shelf life; the loss is shown at cost.
 
 ## When the seller sees DECIDE TÚ
 
-Rules in `core/guard.py`, not the LLM, raise it when a message has: an offer below the floor or below list price, a request for a lower price, more pounds than in stock, an out-of-stock or closed-season product, delivery after the lot loses freshness, delivery outside the seller's zones, pay-later, an invoice, or cleaning/filleting.
+Rules in `core/guard.py`, not the LLM, raise it when a message has: an offer below the floor or below list price (per product or for the whole order), a request for a lower price, more pounds than in stock, an out-of-stock or closed-season product, delivery after the lot loses freshness, delivery outside the seller's zones, pay-later, an invoice, cleaning/filleting, or a request for something free.
 
-`python tests/test_guard.py` checks the parser against 20 synthetic messages written in Honduran WhatsApp style (typos, "lps", numbers in words, totals vs. per-pound offers).
+`python tests/test_guard.py` checks the parser against 30 synthetic messages written in Honduran WhatsApp style: typos, "lps", numbers in words, totals vs. per-pound offers, sarcasm, two or three products in one message, and a buyer who changes their mind. The same benchmark is shown in the app under "Your catalog". Current result: 30/30. The messages and labels were drafted with an LLM's help and reviewed by hand; they are not real conversations.
 
 ## Where AMD runs
 

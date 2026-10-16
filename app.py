@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import analytics, copilot, guard, llm
+from core import analytics, benchmark, copilot, guard, llm
 
 st.set_page_config(page_title="Marea", page_icon="🐟", layout="wide")
 
@@ -22,6 +22,7 @@ EXAMPLES = [
     "¿A cómo la jaiba? Quiero 20 libras.",
     "Necesito 40 libras de róbalo, ¿me lo puede llevar a San Pedro Sula el sábado? ¿Me da factura?",
     "vecino aparteme tres libras de camaron para hoy y se las pago el viernes q me caiga la quincena",
+    "buenas ocupo 8 libras de camaron, 6 de jaiba y cuatro de robalo, le doy 1100 lps por todo puesto mañana en sambo creek",
 ]
 EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs"]
 
@@ -29,6 +30,26 @@ EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs"]
 @st.cache_data
 def load():
     return analytics.load_data()
+
+
+@st.cache_data
+def parser_benchmark():
+    """Scored on the shipped synthetic data, not on the seller's edits or the simulated clock."""
+    catalog, sales, inventory, settings = load()
+    base = analytics.product_table(catalog, sales, inventory, pd.Timestamp(settings["as_of"]))
+    return pd.DataFrame(benchmark.run(base, settings))
+
+
+def describe_items(check):
+    parts = []
+    for it in check.items:
+        part = names[it.pid] + (f" {it.qty_lbs:g} lb" if it.qty_lbs else "")
+        if it.offer_per_lb is not None:
+            part += f" @ L {it.offer_per_lb:g}/lb" + (" (from total)" if it.offer_was_total else "")
+        parts.append(part)
+    if check.bundle_offer is not None:
+        parts.append(f"L {check.bundle_offer:g} for everything")
+    return "; ".join(parts) or "no product"
 
 
 catalog, sales, inventory, settings = load()
@@ -45,7 +66,11 @@ with st.sidebar:
         st.success(f"Model on AMD: {llm.model_name()}")
     else:
         st.warning("No AMD API key set. Using offline templates.")
-    st.caption(f"Seller: {settings['business_name']} · Demo clock: {as_of:%a %d %b %Y, %H:%M}")
+    st.caption(f"Seller: {settings['business_name']}")
+    hours_ahead = st.slider("Simulate time: hours from now", 0, 36, 0, step=3,
+                            help="Stock sells at the 14-day average and every lot ages. No restocking.")
+    st.caption(f"Demo clock: {as_of + pd.Timedelta(hours=hours_ahead):%a %d %b %Y, %H:%M}"
+               + (" (simulated)" if hours_ahead else ""))
     settings["closed_season"] = st.multiselect(
         "Closed season (set by you)", list(names), format_func=names.get)
     st.divider()
@@ -74,11 +99,17 @@ with tab_setup:
     zones = ", ".join(f"{z} (L {fee})" for z, fee in settings["delivery_zones"].items())
     st.markdown(f"**Delivery zones:** {zones}  \n**Delivery hours:** {settings['delivery_hours']}  \n"
                 f"**Minimum order:** {settings['min_order_lbs']} lb  \n**Reply tone:** {settings['tone']}")
+    with st.expander("Parser benchmark: how well the rules read buyer messages"):
+        bench = parser_benchmark()
+        st.metric("Synthetic messages parsed correctly", f"{int(bench['ok'].sum())}/{len(bench)}")
+        st.dataframe(bench, hide_index=True)
+        st.caption("Checks product, pounds, offer, date, zone and DECIDE TÚ flags against hand-reviewed labels "
+                   "(tests/*.jsonl). Messages are synthetic, written in Honduran WhatsApp style.")
 
 e = edited.set_index("product_id")
 catalog = catalog.assign(**{c: catalog["product_id"].map(e[c]) for c in ["list_price", "floor_price", "unit_cost"]})
 inventory = inventory.assign(stock_lbs=inventory["product_id"].map(e["stock_lbs"]))
-table = analytics.product_table(catalog, sales, inventory, as_of)
+table = analytics.product_table(catalog, sales, inventory, as_of, hours_ahead)
 
 with tab_reply:
     pick = st.selectbox("Example buyer message (synthetic)", EXAMPLES)
@@ -110,11 +141,8 @@ with tab_reply:
                     st.write("• The model marked this request as unusual.")
             else:
                 st.success("No rule triggered. Read it and send.")
-            offer = f"L {check.offer_per_lb:g}/lb" + (" (from total)" if check.offer_was_total else "") \
-                if check.offer_per_lb is not None else "none"
             st.caption(
-                f"Parsed by rules: products={[names[p] for p in check.product_ids] or 'none'} · "
-                f"qty={check.qty_lbs or 'n/a'} lb · offer={offer} · zone={check.zone or 'n/a'} · "
+                f"Parsed by rules: {describe_items(check)} · zone={check.zone or 'n/a'} · "
                 f"when={'n/a' if check.when_h is None else f'~{check.when_h} h'}")
         with right:
             st.text_area("Draft reply (edit before sending)", draft.text, height=130)
@@ -123,6 +151,20 @@ with tab_reply:
             st.caption(f"Source: {draft.source}" + (f" · {draft.seconds:.1f} s" if draft.seconds else ""))
             if draft.error:
                 st.warning(f"Model call failed, showing a template instead: {draft.error}")
+
+        deal = analytics.deal_summary(check, table, settings)
+        if deal:
+            st.markdown("**If you accept as written**")
+            d = st.columns(4)
+            d[0].metric("Order value", f"L {deal['revenue']:,.0f}")
+            d[1].metric("Product cost", f"L {deal['cost']:,.0f}")
+            d[2].metric("Gross profit", f"L {deal['profit']:,.0f}",
+                        f"{deal['margin']:.0%} margin", delta_color="off")
+            d[3].metric("vs. your list price", f"L {deal['vs_list']:,.0f}")
+            fee = deal["delivery_fee"]
+            st.caption("Computed with code from the parsed offer (list price where no offer was given). "
+                       + (f"Delivery to {check.zone}: L {fee}, charged to the buyer." if fee is not None
+                          else "No delivery fee included."))
 
     if st.session_state.log:
         st.subheader("Messages handled this session")
@@ -134,7 +176,8 @@ with tab_dash:
     k = st.columns(4)
     k[0].metric("Revenue, last 30 days", f"L {revenue:,.0f}")
     k[1].metric(f"Gross margin ({margin / revenue:.0%})", f"L {margin:,.0f}")
-    k[2].metric("Stock at risk of spoiling", f"{table['at_risk_lbs'].sum():.0f} lb")
+    k[2].metric("Stock at risk of spoiling", f"{table['at_risk_lbs'].sum():.0f} lb",
+                f"L {table['value_at_risk'].sum():,.0f} at cost", delta_color="off")
     k[3].metric("Products needing action", int((table["action"] != "OK").sum()))
     st.subheader("Daily revenue, last 30 days")
     st.line_chart(analytics.daily_revenue(sales))
