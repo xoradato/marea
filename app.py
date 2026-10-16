@@ -6,7 +6,7 @@ import streamlit as st
 
 from core import analytics, benchmark, copilot, guard, llm, ui
 
-st.set_page_config(page_title="Marea", page_icon="🌊", layout="wide")
+st.set_page_config(page_title="Marea", page_icon=":material/waves:", layout="wide")
 ui.inject_css()
 
 # On Streamlit Cloud the key lives in Secrets; locally, export the env vars from .env
@@ -67,11 +67,12 @@ names = dict(zip(catalog["product_id"], catalog["name"]))
 if "log" not in st.session_state:
     st.session_state.log = []
 
-ui.hero(f"🟢 Model on AMD: {llm.model_name()}" if llm.is_configured() else "⚪ AMD model not connected: offline templates",
+ui.hero(llm.is_configured(),
+        f"Model on AMD: {llm.model_name()}" if llm.is_configured() else "AMD model not connected: offline templates",
         f"Seller: {settings['business_name']}")
 
 with st.sidebar:
-    st.subheader("🧭 Controls")
+    st.subheader(":material/tune: Controls")
     hours_ahead = st.slider("Simulate time: hours from now", 0, 36, 0, step=3,
                             help="Stock sells at the 14-day average and every lot ages. No restocking.")
     st.caption(f"Demo clock: {as_of + pd.Timedelta(hours=hours_ahead):%a %d %b %Y, %H:%M}"
@@ -79,14 +80,15 @@ with st.sidebar:
     settings["closed_season"] = st.multiselect(
         "Closed season (set by you)", list(names), format_func=names.get)
     st.divider()
-    st.subheader("⏱️ Time saved (estimate)")
+    st.subheader(":material/timer: Time saved (estimate)")
     manual_s = st.number_input("Seconds to write a reply by hand", 10, 600, 90)
     review_s = st.number_input("Seconds to review a draft", 5, 300, 15)
     metrics_box = st.container()
     st.caption("Assumption-based estimate, not a measurement. All data is synthetic.")
 
 tab_reply, tab_dash, tab_recs, tab_setup = st.tabs(
-    ["💬 Reply to a buyer", "📊 Dashboard", "🧭 What to do today", "⚙️ Your catalog"])
+    [":material/chat: Reply to a buyer", ":material/monitoring: Dashboard",
+     ":material/checklist: What to do today", ":material/inventory_2: Your catalog"])
 
 # Rendered last in the tab bar, but runs first so every tab uses the edited values
 with tab_setup:
@@ -108,7 +110,7 @@ with tab_setup:
         bench = parser_benchmark(FILES_VERSION)
         st.metric("Synthetic messages parsed correctly", f"{int(bench['ok'].sum())}/{len(bench)}")
         for _, r in bench[~bench["ok"]].iterrows():
-            st.markdown(f"- ❌ *{r['message']}*  \n  {r['problems']}")
+            st.markdown(f"- **Fails:** *{r['message']}*  \n  {r['problems']}")
         st.dataframe(bench, hide_index=True)
         st.caption("Checks product, pounds, offer, date, zone and DECIDE TÚ flags against hand-reviewed labels "
                    "(tests/*.jsonl). Messages are synthetic, written in Honduran WhatsApp style.")
@@ -187,7 +189,7 @@ with tab_dash:
     st.area_chart(analytics.daily_revenue(sales), color="#0F7C8C")
     st.subheader("Lots on ice")
     st.dataframe(
-        table.assign(action=table["action"].map(ui.ACTION_LABELS))[
+        table[
             ["name", "stock_lbs", "hours_left", "avg_daily_lbs", "trend_pct", "at_risk_lbs",
              "days_of_cover", "margin_pct", "action"]],
         hide_index=True,
@@ -208,7 +210,7 @@ with tab_dash:
 with tab_recs:
     st.write("Actions come from fixed rules in code. The model on AMD only explains them in plain words.")
     st.dataframe(
-        table.assign(action=table["action"].map(ui.ACTION_LABELS))[
+        table[
             ["name", "action", "suggested_price", "reorder_lbs", "reason"]],
         hide_index=True,
         column_config={
