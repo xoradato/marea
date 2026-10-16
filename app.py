@@ -164,8 +164,7 @@ with tab_reply:
             d = st.columns(4)
             d[0].metric("Order value", f"L {deal['revenue']:,.0f}")
             d[1].metric("Product cost", f"L {deal['cost']:,.0f}")
-            d[2].metric("Gross profit", f"L {deal['profit']:,.0f}",
-                        f"{deal['margin']:.0%} margin", delta_color="off")
+            d[2].metric(f"Gross profit ({deal['margin']:.0%} margin)", f"L {deal['profit']:,.0f}")
             d[3].metric("vs. your list price", f"L {deal['vs_list']:,.0f}")
             fee = deal["delivery_fee"]
             st.caption("Computed with code from the parsed offer (list price where no offer was given). "
@@ -182,8 +181,8 @@ with tab_dash:
     k = st.columns(4)
     k[0].metric("Revenue, last 30 days", f"L {revenue:,.0f}")
     k[1].metric(f"Gross margin ({margin / revenue:.0%})", f"L {margin:,.0f}")
-    k[2].metric("Stock at risk of spoiling", f"{table['at_risk_lbs'].sum():.0f} lb",
-                f"L {table['value_at_risk'].sum():,.0f} at cost", delta_color="off")
+    k[2].metric(f"At risk of spoiling (L {table['value_at_risk'].sum():,.0f} at cost)",
+                f"{table['at_risk_lbs'].sum():.0f} lb")
     k[3].metric("Products needing action", int((table["action"] != "OK").sum()))
     st.subheader("Daily revenue, last 30 days")
     st.area_chart(analytics.daily_revenue(sales), color="#0F7C8C")
