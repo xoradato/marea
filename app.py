@@ -102,6 +102,8 @@ with tab_setup:
     with st.expander("Parser benchmark: how well the rules read buyer messages"):
         bench = parser_benchmark()
         st.metric("Synthetic messages parsed correctly", f"{int(bench['ok'].sum())}/{len(bench)}")
+        for _, r in bench[~bench["ok"]].iterrows():
+            st.markdown(f"- ❌ *{r['message']}*  \n  {r['problems']}")
         st.dataframe(bench, hide_index=True)
         st.caption("Checks product, pounds, offer, date, zone and DECIDE TÚ flags against hand-reviewed labels "
                    "(tests/*.jsonl). Messages are synthetic, written in Honduran WhatsApp style.")
