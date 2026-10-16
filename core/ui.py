@@ -17,9 +17,9 @@ CSS = f"""
 ::selection {{ background: #BFE0DB; color: #10262F; }}
 .st-key-hero {{
   background: #0B3C5D url("{TIDE}") bottom / 100% 34px no-repeat;
-  border-radius: 14px; padding: 18px 24px 44px; gap: 0.25rem;
+  border-radius: 14px; padding: 6px 24px 44px;
 }}
-.st-key-hero h1 {{ color: #FFFFFF; font-weight: 800; font-size: 2.1rem; letter-spacing: -0.02em; padding: 0; }}
+.st-key-hero h1 {{ color: #FFFFFF; font-weight: 800; font-size: 2.1rem; letter-spacing: -0.02em; }}
 .st-key-hero p {{ color: #D5EAE7; margin: 0; max-width: 70ch; }}
 .st-key-hero [data-testid="stIconMaterial"] {{ color: #8FD3C9; }}
 .st-key-decide {{ background: #FBE9E5; color: #6E1E10; border-radius: 12px; padding: 14px 18px; }}
