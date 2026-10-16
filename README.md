@@ -20,6 +20,12 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 - Mark down when a lot has half or less of its shelf life left and stock is at risk: 10% off, or 15% if more than 40% of the lot is at risk. Never below the seller's floor price.
 - Restock to cover 2 days of demand.
 
+## When the seller sees DECIDE TÚ
+
+Rules in `core/guard.py`, not the LLM, raise it when a message has: an offer below the floor or below list price, a request for a lower price, more pounds than in stock, an out-of-stock or closed-season product, delivery after the lot loses freshness, delivery outside the seller's zones, pay-later, an invoice, or cleaning/filleting.
+
+`python tests/test_guard.py` checks the parser against 20 synthetic messages written in Honduran WhatsApp style (typos, "lps", numbers in words, totals vs. per-pound offers).
+
 ## Where AMD runs
 
 All language model calls (reply drafts and explanations) go to a model served on AMD GPUs through AMD Token Factory. See `core/llm.py`. Model: _TBD_.

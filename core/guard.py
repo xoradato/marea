@@ -20,7 +20,16 @@ PRICE_RES = [
     re.compile(rf"\b(?:a|en|por)\s+{NUM}\b(?!\s*(?:lbs?|libras?))"),  # "a 60", "en 800"
     re.compile(rf"\b(?:doy|pago|ofrezco)\s+{NUM}\b(?!\s*(?:lbs?|libras?))"),  # "le doy 600"
 ]
-DELIVERY_WORDS = ("llev", "entreg", "envi", "domicilio", "mand", "traer", "traig")
+DELIVERY_WORDS = ("llev", "entreg", "envi", "domicilio", "mand", "trae", "traig")
+# Requests the seller must answer personally, even when price and stock are fine
+SPECIAL_REQUESTS = [
+    ("PAY_LATER", ("fiado", "credito", "se lo pago", "se las pago", "se los pago", "le pago el",
+                   "pago despues", "quincena"), "Buyer wants to pay later."),
+    ("INVOICE", ("factura", "rtn"), "Buyer asks for an invoice (factura)."),
+    ("CUSTOM_PREP", ("filete", "escamad", "limpi", "sin tripa", "destripad"),
+     "Buyer asks for cleaning or filleting."),
+]
+DISCOUNT_WORDS = ("lo menos", "rebaj", "descuento", "ultimo precio", "mas barato")
 FRESHNESS_BUFFER_H = 6  # the lot must still be fresh 6 h after delivery
 
 
@@ -44,6 +53,7 @@ class Check:
     zone: str | None = None
     delivery: bool = False
     when_h: int | None = None
+    text: str = ""  # normalized message
     flags: list = field(default_factory=list)  # (code, message)
 
 
@@ -70,9 +80,11 @@ def check_message(text, table, settings):
         c.offer_per_lb = round(offer, 2)
 
     for zone in settings["delivery_zones"]:
-        if normalize(zone) in t:
+        places = [zone] + settings.get("zone_aliases", {}).get(zone, [])
+        if any(re.search(rf"\b{re.escape(normalize(p))}\b", t) for p in places):
             c.zone = zone
     c.delivery = c.zone is not None or any(w in t for w in DELIVERY_WORDS)
+    c.text = t
 
     if "pasado manana" in t:
         c.when_h = 48
@@ -109,6 +121,12 @@ def _flags(c, rows, settings):
         elif c.offer_per_lb < r["list_price"]:
             flags.append(("COUNTER_OFFER", f"Offer L {c.offer_per_lb:g}/lb is between your floor and list price. "
                                            "Accept or counter?"))
+    elif any(w in c.text for w in DISCOUNT_WORDS):
+        flags.append(("DISCOUNT_ASK", "Buyer asks for a lower price without naming one."))
+
+    for code, words, message in SPECIAL_REQUESTS:
+        if any(w in c.text for w in words):
+            flags.append((code, message))
 
     if c.delivery and c.zone is None:
         zones = ", ".join(settings["delivery_zones"])

@@ -21,6 +21,7 @@ EXAMPLES = [
     "Hola, ¿tiene pargo? Ocupo 5 libras para hoy aquí en La Ceiba.",
     "¿A cómo la jaiba? Quiero 20 libras.",
     "Necesito 40 libras de róbalo, ¿me lo puede llevar a San Pedro Sula el sábado? ¿Me da factura?",
+    "vecino aparteme tres libras de camaron para hoy y se las pago el viernes q me caiga la quincena",
 ]
 EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs"]
 

@@ -8,6 +8,14 @@
     "Jutiapa": 80,
     "Tela": 150
   },
+  "zone_aliases": {
+    "La Ceiba": [
+      "Barrio La Isla",
+      "Barrio Inglés",
+      "Mazapán",
+      "Zona Viva"
+    ]
+  },
   "delivery_hours": "Monday to Saturday, 7:00-17:00",
   "min_order_lbs": 3,
   "closed_season": [],

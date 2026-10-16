@@ -45,6 +45,8 @@ SETTINGS = {
     "home_base": "La Ceiba",
     "tone": "Warm and brief Honduran Spanish, uses 'usted', at most 3 sentences, at most one emoji.",
     "delivery_zones": {"La Ceiba": 0, "Sambo Creek": 60, "Jutiapa": 80, "Tela": 150},
+    # Neighborhoods the seller counts as inside a zone
+    "zone_aliases": {"La Ceiba": ["Barrio La Isla", "Barrio Inglés", "Mazapán", "Zona Viva"]},
     "delivery_hours": "Monday to Saturday, 7:00-17:00",
     "min_order_lbs": 3,
     "closed_season": [],
