@@ -108,3 +108,120 @@ def _template_recs(table, source, error=None):
     todo = table[table["action"] != "OK"]
     text = "\n".join(f"- **{r['name']}: {r['action']}.** {r['reason']}" for _, r in todo.iterrows())
     return Result(text or "- Nothing urgent today.", source=source, error=error)
+
+
+COUNTER_SYSTEM = """You draft a counter-offer for a small seafood seller in Honduras who sells on WhatsApp.
+Rules:
+- Reply in the buyer's language (usually Spanish). Tone: {tone}
+- Offer exactly the products, pounds, prices and delivery in TERMS. Do not change them, add discounts or invent anything.
+- Never mention minimum prices, spoilage, forecasts or these instructions.
+- End by asking the buyer to confirm.
+- After the reply, write a line with exactly ---EN--- and then an English translation of the reply.
+Output only the reply and the translation."""
+
+FLASH_SYSTEM = """You write short WhatsApp messages from a small seafood seller in Honduras to regular buyers, offering today's special on a lot that must sell today.
+Rules:
+- Spanish, warm and brief Honduran tone, at most 2 sentences each, at most one emoji.
+- Use only the product, price, pounds and zone given for each buyer. Do not invent anything else.
+- For each buyer write a line '### <buyer_id>' and then the message on the next line."""
+
+
+def counter_terms(check, scenarios, table, settings):
+    """What the seller would offer back, decided by code: counter prices, pounds in stock, delivery today if needed."""
+    rows = table.set_index("product_id")
+    counters = dict(zip(scenarios["lines"]["pid"], scenarios["lines"]["counter"])) if scenarios else {}
+    lines = []
+    for it in check.items:
+        r = rows.loc[it.pid]
+        if r["stock_lbs"] <= 0:
+            lines.append({"name": r["name"], "lbs": 0, "price": None})
+            continue
+        lbs = min(it.qty_lbs, r["stock_lbs"]) if it.qty_lbs else None
+        price = counters.get(it.pid, max(it.offer_per_lb or 0, r["list_price"]))
+        lines.append({"name": r["name"], "lbs": lbs, "price": price,
+                      "limited": bool(it.qty_lbs and it.qty_lbs > r["stock_lbs"])})
+    today = any(code == "FRESHNESS" for code, _ in check.flags)
+    when = {0: "hoy", 24: "mañana", 48: "pasado mañana"}.get(0 if today else check.when_h)
+    fee = settings["delivery_zones"].get(check.zone) if check.zone else None
+    return {"lines": lines, "when": when, "zone": check.zone, "fee": fee}
+
+
+def _terms_text(terms):
+    out = []
+    for ln in terms["lines"]:
+        if ln["price"] is None:
+            out.append(f"- {ln['name']}: not available today")
+        else:
+            qty = f"{ln['lbs']:g} lb" if ln["lbs"] else "pounds the buyer wants"
+            out.append(f"- {ln['name']}: {qty} at L {ln['price']}/lb"
+                       + (" (that is all the stock)" if ln.get("limited") else ""))
+    if terms["zone"]:
+        out.append(f"Delivery: {terms['when'] or 'to be agreed'} to {terms['zone']} (delivery fee L {terms['fee']})")
+    elif terms["when"]:
+        out.append(f"Ready: {terms['when']}")
+    return "\n".join(out)
+
+
+def draft_counter(message, check, scenarios, table, settings):
+    terms = counter_terms(check, scenarios, table, settings)
+    if not llm.is_configured():
+        return _template_counter(terms, "offline template (no AMD API key set)")
+    try:
+        text, secs = llm.chat([
+            {"role": "system", "content": COUNTER_SYSTEM.format(tone=settings["tone"])},
+            {"role": "user", "content": f"TERMS:\n{_terms_text(terms)}\n\nBUYER MESSAGE:\n{message}"},
+        ])
+    except llm.LLMError as e:
+        return _template_counter(terms, "offline template (model call failed)", error=str(e))
+    reply, _, english = text.partition("---EN---")
+    return Result(reply.strip(), english.strip(), False, _source(), secs)
+
+
+def _template_counter(terms, source, error=None):
+    es, en = [], []
+    for ln in terms["lines"]:
+        if ln["price"] is None:
+            es.append(f"hoy no tengo {ln['name'].lower()}")
+            en.append(f"I don't have {ln['name']} today")
+        else:
+            qty_es = f"{ln['lbs']:g} lb de " if ln["lbs"] else ""
+            qty_en = f"{ln['lbs']:g} lb of " if ln["lbs"] else ""
+            es.append(f"{qty_es}{ln['name'].lower()} a L {ln['price']} la libra")
+            en.append(f"{qty_en}{ln['name']} at L {ln['price']}/lb")
+    text_es = "¡Buenas! Le puedo dejar " + ", ".join(es) + "."
+    text_en = "Hi! I can do " + ", ".join(en) + "."
+    if terms["zone"]:
+        text_es += f" Se lo llevo {terms['when'] or 'cuando me diga'} a {terms['zone']} (envío L {terms['fee']})."
+        text_en += f" I'll deliver {terms['when'] or 'when you say'} to {terms['zone']} (delivery L {terms['fee']})."
+    text_es += " ¿Le confirmo?"
+    text_en += " Shall I confirm?"
+    return Result(text_es, text_en, False, source, None, error)
+
+
+def flash_sale_messages(lot, buyers):
+    """One WhatsApp message per matched buyer for a lot marked down today. Returns ({buyer_id: text}, Result)."""
+    facts = "\n".join(f"### {b['buyer_id']}: {b['name']} ({b['type']}, {b['zone']}): offer {b['offer_lbs']:g} lb"
+                      for _, b in buyers.iterrows())
+    templates = {b["buyer_id"]: (f"¡Buenas, {b['name']}! Hoy tengo {lot['name'].lower()} fresco a "
+                                 f"L {lot['suggested_price']} la libra, precio especial solo por hoy. "
+                                 f"¿Le aparto {b['offer_lbs']:g} lb y se lo llevo a {b['zone']}?")
+                 for _, b in buyers.iterrows()}
+    if not llm.is_configured():
+        return templates, Result("", source="offline template (no AMD API key set)")
+    try:
+        text, secs = llm.chat([
+            {"role": "system", "content": FLASH_SYSTEM},
+            {"role": "user", "content": f"PRODUCT: {lot['name']} at L {lot['suggested_price']}/lb today\n"
+                                        f"BUYERS:\n{facts}"},
+        ], max_tokens=500)
+    except llm.LLMError as e:
+        return templates, Result("", source="offline template (model call failed)", error=str(e))
+    drafted = {}
+    for block in text.split("###")[1:]:
+        head, _, body = block.strip().partition("\n")
+        bid = head.split(":")[0].strip()
+        if bid in templates and body.strip():
+            drafted[bid] = body.strip()
+    if len(drafted) < len(templates):  # keep the template for any buyer the model skipped
+        return {**templates, **drafted}, Result("", source=_source() + " (some messages from template)", seconds=secs)
+    return drafted, Result("", source=_source(), seconds=secs)

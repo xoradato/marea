@@ -38,6 +38,18 @@ INVENTORY = [
     ("MAC", 20, 8),
 ]
 
+# Regular buyers (invented names): id, name, type, zone, preferred products, typical lb per order, days since last order
+BUYERS = [
+    ("B01", "Comedor Doña Lety", "comedor", "La Ceiba", "SHR|SNP|MAC", 15, 3),
+    ("B02", "Restaurante Brisa Norte", "restaurant", "La Ceiba", "SHR|LOB|SNK", 25, 6),
+    ("B03", "Pulpería El Faro Azul", "reseller", "Sambo Creek", "MAC|CRB", 12, 9),
+    ("B04", "Hotelito Las Palmas", "hotel", "Tela", "SHR|LOB|SNP", 30, 12),
+    ("B05", "Carmen Zelaya", "household", "La Ceiba", "SNP|SNK", 5, 2),
+    ("B06", "Asados Los Cayos", "restaurant", "Jutiapa", "SNK|SNP|SHR", 18, 5),
+    ("B07", "Don Mario (reventa, mercado)", "reseller", "La Ceiba", "SHR|MAC|CRB", 40, 20),
+    ("B08", "Sopas El Pescador", "comedor", "Sambo Creek", "CRB|SNK|MAC", 10, 4),
+]
+
 WEEKDAY_FACTOR = [0.8, 0.85, 0.9, 1.0, 1.25, 1.35, 1.15]  # Mon..Sun
 
 SETTINGS = {
@@ -91,7 +103,11 @@ def main():
         for pid, stock, age in INVENTORY
     ])
 
+    buyers = pd.DataFrame(BUYERS, columns=["buyer_id", "name", "type", "zone", "preferred_products",
+                                           "typical_lbs", "last_order_days_ago"])
+
     catalog.to_csv(OUT_DIR / "catalog.csv", index=False)
+    buyers.to_csv(OUT_DIR / "buyers.csv", index=False)
     sales.to_csv(OUT_DIR / "sales.csv", index=False)
     inventory.to_csv(OUT_DIR / "inventory.csv", index=False)
     (OUT_DIR / "settings.json").write_text(json.dumps(SETTINGS, indent=2, ensure_ascii=False), encoding="utf-8")

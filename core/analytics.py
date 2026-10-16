@@ -20,6 +20,10 @@ def load_data(data_dir=DATA_DIR):
     return catalog, sales, inventory, settings
 
 
+def load_buyers(data_dir=DATA_DIR):
+    return pd.read_csv(data_dir / "buyers.csv")
+
+
 def _lbs_by_product(sales, days, offset_days=0):
     end = sales["date"].max() - pd.Timedelta(days=offset_days)
     start = end - pd.Timedelta(days=days)
@@ -115,6 +119,75 @@ def deal_summary(check, table, settings):
         "vs_list": revenue - lines["list_revenue"].sum(),
         "delivery_fee": settings["delivery_zones"].get(check.zone) if check.zone else None,
     }
+
+
+def offer_prices(check, table):
+    """Offered price per lb for each item with a quantity. A whole-order offer is split by list value."""
+    rows = table.set_index("product_id")
+    items = [it for it in check.items if it.qty_lbs]
+    if check.bundle_offer is not None and items:
+        list_total = sum(it.qty_lbs * rows.loc[it.pid, "list_price"] for it in items)
+        return {it.pid: check.bundle_offer * rows.loc[it.pid, "list_price"] / list_total for it in items}
+    return {it.pid: it.offer_per_lb for it in items if it.offer_per_lb is not None}
+
+
+def offer_scenarios(check, table):
+    """Accept the offer, counter it, or reject and wait: lempiras each option brings in from the lots involved.
+
+    Uses the same forecast as the dashboard: other buyers take avg_daily_lbs per day until the lot's
+    freshness runs out; whatever is left then spoils. Fish already bought is a sunk cost, so options
+    are compared on the money they bring in. None when the message has no offer below list price.
+    """
+    rows = table.set_index("product_id")
+    qty = {it.pid: it.qty_lbs for it in check.items}
+    lines = []
+    for pid, offer in offer_prices(check, table).items():
+        r = rows.loc[pid]
+        if r["stock_lbs"] <= 0 or offer >= r["list_price"]:
+            continue
+        lbs = min(qty[pid], r["stock_lbs"])
+        others = r["avg_daily_lbs"] * r["hours_left"] / 24      # lb other buyers take before it spoils
+        rest = min(others, r["stock_lbs"] - lbs)                 # sold to others if this deal closes
+        waited = min(others, r["stock_lbs"])                     # sold to others if it does not
+        lp = r["list_price"]
+        walk_away = (waited - rest) * lp / lbs                   # lowest price/lb that still beats waiting
+        counter = int(min(lp, max((offer + lp) / 2, walk_away)) + 0.5)
+        lines.append({
+            "pid": pid, "product": r["name"], "lbs": lbs, "offer": round(offer, 2), "list": lp,
+            "floor": r["floor_price"], "walk_away": round(walk_away, 1), "counter": counter,
+            "accept": lbs * offer + rest * lp, "counter_value": lbs * counter + rest * lp, "wait": waited * lp,
+            "spoil_accept": r["stock_lbs"] - lbs - rest, "spoil_wait": r["stock_lbs"] - waited,
+            "unit_cost": r["unit_cost"],
+        })
+    if not lines:
+        return None
+    lines = pd.DataFrame(lines)
+    return {
+        "lines": lines,
+        "accept": lines["accept"].sum(),
+        "counter": lines["counter_value"].sum(),
+        "wait": lines["wait"].sum(),
+        "spoil_accept_lbs": lines["spoil_accept"].sum(),
+        "spoil_wait_lbs": lines["spoil_wait"].sum(),
+        "spoil_wait_cost": (lines["spoil_wait"] * lines["unit_cost"]).sum(),
+    }
+
+
+def match_buyers(lot, buyers, settings, top=3):
+    """Rank regular buyers for a lot at risk: species 50, volume fit 30, zone 10, recent order 10."""
+    zones = settings["delivery_zones"]
+    max_fee = max(zones.values()) or 1
+
+    def score(b):
+        species = 50 if lot["product_id"] in b["preferred_products"].split("|") else 0
+        volume = 30 * min(b["typical_lbs"], lot["at_risk_lbs"]) / lot["at_risk_lbs"] if lot["at_risk_lbs"] else 0
+        zone = 10 * (1 - zones[b["zone"]] / max_fee) if b["zone"] in zones else 0
+        recent = 10 if b["last_order_days_ago"] <= 7 else 5 if b["last_order_days_ago"] <= 14 else 0
+        return round(species + volume + zone + recent)
+
+    ranked = buyers.assign(match=buyers.apply(score, axis=1)).sort_values("match", ascending=False)
+    ranked["offer_lbs"] = ranked["typical_lbs"].clip(upper=lot["at_risk_lbs"]).round(0)
+    return ranked.head(top)
 
 
 def daily_revenue(sales, days=30):

@@ -10,7 +10,9 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 
 1. **Reply to a buyer.** Paste a buyer message. Rules in code read each product, pounds and offer (also in multi-product orders and "L 1100 for everything" offers) and check them against the seller's floor price, stock, delivery zone and lot freshness. If any rule triggers, the seller sees **DECIDE TÚ** and the draft is a holding reply. Otherwise the model drafts a reply in the seller's tone. Under the draft, the order's value, cost, gross profit and discount vs. list price are computed with code.
 2. **Dashboard.** Revenue, margin, stock at risk of spoiling (in pounds and lempiras at cost), and days of cover, computed with pandas. A time slider simulates the next 36 hours: stock sells at the 14-day average and lots age, so you can see when markdowns start and when a lot must be discarded.
-3. **What to do today.** Fixed rules choose the action (mark down, restock, discard). The model only explains the numbers.
+3. **What to do today.** Fixed rules choose the action (mark down, restock, discard). The model only explains the numbers. For each lot marked down, regular buyers are ranked with code and the model drafts a flash-sale WhatsApp message for each one. Nothing is sent automatically.
+
+When a buyer makes an offer, Marea compares three options in lempiras: accept, counter-offer, or reject and wait. The seller can draft the counter-offer, then confirm the order: stock drops everywhere in the app and a WhatsApp-ready receipt is generated.
 
 ## How the numbers are calculated (no LLM)
 
@@ -20,6 +22,10 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 - Mark down when a lot has half or less of its shelf life left and stock is at risk: 10% off, or 15% if more than 40% of the lot is at risk. Never below the seller's floor price.
 - Restock to cover 2 days of demand.
 - Discard when a lot is past its shelf life; the loss is shown at cost.
+- Sell now or wait: other buyers take the 14-day average until the lot's freshness runs out, the rest spoils. Accept = offer × pounds + list price × what others still buy; wait = list price × what others buy. Fish on ice is a sunk cost, so options are compared on money in. Walk-away price = lowest price per pound at which selling now still beats waiting. Counter-offer = halfway between offer and list price, never below the walk-away price.
+- Buyer match score (0–100): buys this species 50, usual order size against pounds at risk 30, delivery zone 10, ordered in the last week 10.
+
+`python tests/test_offer.py` checks these rules on the synthetic data.
 
 ## When the seller sees DECIDE TÚ
 
