@@ -126,10 +126,16 @@ Rules:
 - For each buyer write a line '### <buyer_id>' and then the message on the next line."""
 
 
-def counter_terms(check, scenarios, table, settings):
-    """What the seller would offer back, decided by code: counter prices, pounds in stock, delivery today if needed."""
+WHEN_ES = {0: "hoy", 24: "mañana", 48: "pasado mañana"}
+WHEN_EN = {0: "today", 24: "tomorrow", 48: "the day after tomorrow"}
+
+
+def counter_terms(check, scenarios, table, settings, accept=False):
+    """What the seller offers back, decided by code: counter (or the buyer's) prices, pounds in stock,
+    delivery today when the lot would not last until the requested day."""
     rows = table.set_index("product_id")
-    counters = dict(zip(scenarios["lines"]["pid"], scenarios["lines"]["counter"])) if scenarios else {}
+    col = "offer" if accept else "counter"
+    counters = dict(zip(scenarios["lines"]["pid"], scenarios["lines"][col])) if scenarios else {}
     lines = []
     for it in check.items:
         r = rows.loc[it.pid]
@@ -141,9 +147,10 @@ def counter_terms(check, scenarios, table, settings):
         lines.append({"name": r["name"], "lbs": lbs, "price": price,
                       "limited": bool(it.qty_lbs and it.qty_lbs > r["stock_lbs"])})
     today = any(code == "FRESHNESS" for code, _ in check.flags)
-    when = {0: "hoy", 24: "mañana", 48: "pasado mañana"}.get(0 if today else check.when_h)
+    when_h = 0 if today else check.when_h
     fee = settings["delivery_zones"].get(check.zone) if check.zone else None
-    return {"lines": lines, "when": when, "zone": check.zone, "fee": fee}
+    return {"lines": lines, "when": WHEN_ES.get(when_h), "when_en": WHEN_EN.get(when_h),
+            "zone": check.zone, "fee": fee, "accept": accept}
 
 
 def _terms_text(terms):
@@ -156,14 +163,15 @@ def _terms_text(terms):
             out.append(f"- {ln['name']}: {qty} at L {ln['price']}/lb"
                        + (" (that is all the stock)" if ln.get("limited") else ""))
     if terms["zone"]:
-        out.append(f"Delivery: {terms['when'] or 'to be agreed'} to {terms['zone']} (delivery fee L {terms['fee']})")
-    elif terms["when"]:
-        out.append(f"Ready: {terms['when']}")
+        out.append(f"Delivery: {terms['when_en'] or 'to be agreed'} to {terms['zone']} (delivery fee L {terms['fee']})")
+    elif terms["when_en"]:
+        out.append(f"Ready: {terms['when_en']}")
+    out.append("The seller accepts the buyer's price." if terms["accept"] else "This is the seller's counter-offer.")
     return "\n".join(out)
 
 
-def draft_counter(message, check, scenarios, table, settings):
-    terms = counter_terms(check, scenarios, table, settings)
+def draft_counter(message, check, scenarios, table, settings, accept=False):
+    terms = counter_terms(check, scenarios, table, settings, accept)
     if not llm.is_configured():
         return _template_counter(terms, "offline template (no AMD API key set)")
     try:
@@ -186,13 +194,17 @@ def _template_counter(terms, source, error=None):
         else:
             qty_es = f"{ln['lbs']:g} lb de " if ln["lbs"] else ""
             qty_en = f"{ln['lbs']:g} lb of " if ln["lbs"] else ""
-            es.append(f"{qty_es}{ln['name'].lower()} a L {ln['price']} la libra")
-            en.append(f"{qty_en}{ln['name']} at L {ln['price']}/lb")
-    text_es = "¡Buenas! Le puedo dejar " + ", ".join(es) + "."
-    text_en = "Hi! I can do " + ", ".join(en) + "."
+            es.append(f"{qty_es}{ln['name'].lower()} a L {ln['price']:g} la libra")
+            en.append(f"{qty_en}{ln['name']} at L {ln['price']:g}/lb")
+    if terms["accept"]:
+        text_es = "¡Trato hecho! Le dejo " + ", ".join(es) + "."
+        text_en = "Deal! I'll let you have " + ", ".join(en) + "."
+    else:
+        text_es = "¡Buenas! Le puedo dejar " + ", ".join(es) + "."
+        text_en = "Hi! I can do " + ", ".join(en) + "."
     if terms["zone"]:
         text_es += f" Se lo llevo {terms['when'] or 'cuando me diga'} a {terms['zone']} (envío L {terms['fee']})."
-        text_en += f" I'll deliver {terms['when'] or 'when you say'} to {terms['zone']} (delivery L {terms['fee']})."
+        text_en += f" I'll deliver {terms['when_en'] or 'when you say'} to {terms['zone']} (delivery L {terms['fee']})."
     text_es += " ¿Le confirmo?"
     text_en += " Shall I confirm?"
     return Result(text_es, text_en, False, source, None, error)

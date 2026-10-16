@@ -157,29 +157,56 @@ with tab_reply:
             check = guard.check_message(msg, table, settings)
             with st.spinner("Drafting on AMD..."):
                 draft = copilot.draft_reply(msg, check, table, settings)
-            st.session_state.last = (check, draft)
+            st.session_state.active = msg
+            st.session_state.replies = {"hold": draft}
             st.session_state.receipt = None
-            st.session_state.log.append({
+            entry = {
                 "message": msg if len(msg) <= 70 else msg[:67] + "...",
                 "decide_tu": bool(check.flags or draft.review),
                 "reasons": ", ".join(code for code, _ in check.flags) + (" REVIEW" if draft.review else ""),
                 "source": draft.source,
-            })
+            }
+            log = st.session_state.log
+            if log and log[-1]["message"] == entry["message"]:
+                log[-1] = entry  # same message drafted again: update the row instead of repeating it
+            else:
+                log.append(entry)
 
-    if "last" in st.session_state:
-        check, draft = st.session_state.last
+    mode = "hold"
+    if st.session_state.get("active"):
+        active = st.session_state.active
+        # Rules run again on every render, so flags, freshness and prices follow the clock, stock and settings
+        check = guard.check_message(active, table, settings)
+        hold = st.session_state.replies["hold"]
+        sc = analytics.offer_scenarios(check, table)
         left, right = st.columns(2)
         with left:
-            if check.flags or draft.review:
+            if check.flags or hold.review:
                 ui.decide_card([m for _, m in check.flags]
-                               + (["The model marked this request as unusual."] if draft.review else []))
+                               + (["The model marked this request as unusual."] if hold.review else []))
             else:
                 ui.safe_card()
             st.caption(
                 f"Parsed by rules: {describe_items(check)} · zone={check.zone or 'n/a'} · "
                 f"when={'n/a' if check.when_h is None else f'~{check.when_h} h'}")
         with right:
-            st.text_area("Draft reply (edit before sending)", draft.text, height=130)
+            if sc:
+                ln = sc["lines"]
+                counter_p = ", ".join(f"L {c:g}" for c in ln["counter"])
+                offer_p = ", ".join(f"L {o:g}" for o in ln["offer"])
+                options = {"hold": "Hold: ask to wait", "counter": f"Counter at {counter_p}/lb",
+                           "accept": f"Accept {offer_p}/lb"}
+                mode = st.radio("Your decision", list(options), format_func=options.get, horizontal=True,
+                                key=f"mode_{abs(hash(active))}")
+                cache_key = f"{mode}:{counter_p if mode == 'counter' else offer_p}"
+                if mode != "hold" and cache_key not in st.session_state.replies:
+                    with st.spinner("Drafting on AMD..."):
+                        st.session_state.replies[cache_key] = copilot.draft_counter(
+                            active, check, sc, table, settings, accept=(mode == "accept"))
+                draft = hold if mode == "hold" else st.session_state.replies[cache_key]
+            else:
+                draft = hold
+            st.text_area("Reply to send (edit before sending)", draft.text, height=130)
             if draft.english:
                 st.caption(f"EN: {draft.english}")
             st.caption(f"Source: {draft.source}" + (f" · {draft.seconds:.1f} s" if draft.seconds else ""))
@@ -199,7 +226,6 @@ with tab_reply:
                        + (f"Delivery to {check.zone}: L {fee}, charged to the buyer." if fee is not None
                           else "No delivery fee included."))
 
-        sc = analytics.offer_scenarios(check, table)
         if sc:
             st.subheader("Sell now or wait?")
             s = st.columns(3)
@@ -228,26 +254,18 @@ with tab_reply:
                     "is a sunk cost, so the options are compared on money in. The counter-offer splits the "
                     "difference between the offer and your list price, never below the walk-away price.")
                 st.dataframe(ln.drop(columns=["pid", "unit_cost"]), hide_index=True)
-            if st.button("Draft the counter-offer (you decide whether to send it)"):
-                with st.spinner("Drafting on AMD..."):
-                    st.session_state.counter = (check.text, copilot.draft_counter(msg, check, sc, table, settings))
-            if st.session_state.get("counter", (None,))[0] == check.text:
-                cdraft = st.session_state.counter[1]
-                st.text_area("Counter-offer draft (edit before sending)", cdraft.text, height=110)
-                if cdraft.english:
-                    st.caption(f"EN: {cdraft.english}")
-                st.caption(f"Source: {cdraft.source}" + (f" · {cdraft.seconds:.1f} s" if cdraft.seconds else ""))
-
         if check.items:
             st.subheader("Close the order")
             offered = analytics.offer_prices(check, table)
+            if mode == "counter":
+                offered = dict(zip(sc["lines"]["pid"], sc["lines"]["counter"]))
             cart = pd.DataFrame([{
                 "product": names[it.pid],
                 "lbs": float(min(it.qty_lbs or 0, rows.loc[it.pid, "stock_lbs"])),
                 "price_per_lb": float(round(offered.get(it.pid, rows.loc[it.pid, "list_price"]))),
             } for it in check.items])
             cart = st.data_editor(
-                cart, hide_index=True, num_rows="dynamic", key=f"cart_{abs(hash(check.text))}",
+                cart, hide_index=True, num_rows="dynamic", key=f"cart_{abs(hash(active))}_{mode}",
                 column_config={
                     "product": st.column_config.SelectboxColumn("Product", options=list(names.values()), required=True),
                     "lbs": st.column_config.NumberColumn("Pounds", min_value=0, format="%.1f"),
