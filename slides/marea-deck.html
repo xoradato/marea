@@ -1,0 +1,585 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Marea · Sell before it spoils</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,200;9..144,300&family=Instrument+Serif:ital@0;1&family=Geist:wght@300;400;500&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
+<style>
+/* ===========================================
+   THEME
+   Caustics: sunlight moving on a shallow reef floor. One color family, one light.
+   Change these variables to recolor the whole deck.
+   =========================================== */
+:root {
+    --stage-bg: #052A35;
+    --slide-bg: transparent;          /* slides are transparent: the water lives on the stage */
+    --water-top: #0F6271;
+    --water: #0A4552;
+    --floor: #052A35;
+    --light: #CDEFE8;                  /* main text */
+    --glass: #8FD3C9;                  /* sea-glass accent */
+    --dim: rgba(205, 239, 232, .72);   /* secondary text */
+    --hair: rgba(205, 239, 232, .22);  /* hairlines */
+    --card: rgba(205, 239, 232, .07);
+
+    --font-display: 'Fraunces', serif;          /* big words, thin */
+    --font-accent: 'Instrument Serif', serif;   /* italic lines that carry the voice */
+    --font-body: 'Geist', sans-serif;
+    --font-mono: 'Geist Mono', monospace;
+
+    --pad: 120px;
+    --ease: cubic-bezier(.16, 1, .3, 1);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* ===========================================
+   FIXED 16:9 STAGE (viewport-base.css, included in full)
+   =========================================== */
+html,
+body {
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+.deck-viewport {
+    position: fixed;
+    inset: 0;
+    overflow: hidden;
+    background: var(--stage-bg, #000);
+}
+.deck-stage {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    transform-origin: 0 0;
+    background: var(--slide-bg, #fff);
+}
+.slide {
+    position: absolute;
+    inset: 0;
+    width: 1920px;
+    height: 1080px;
+    overflow: hidden;
+    display: block;
+    visibility: hidden;
+    opacity: 0;
+    pointer-events: none;
+    background: var(--slide-bg, #fff);
+}
+.slide.active,
+.slide.visible {
+    visibility: visible;
+    opacity: 1;
+    pointer-events: auto;
+    z-index: 1;
+}
+img,
+video,
+canvas,
+svg {
+    max-width: 100%;
+    max-height: 100%;
+}
+.deck-controls {
+    position: fixed;
+    left: 50%;
+    bottom: 22px;
+    transform: translateX(-50%);
+    z-index: 1000;
+}
+@media print {
+    html,
+    body {
+        width: 1920px;
+        height: auto;
+        overflow: visible;
+        background: #fff;
+    }
+    .deck-viewport {
+        position: static;
+        overflow: visible;
+        background: #fff;
+    }
+    .deck-stage {
+        position: static;
+        width: auto;
+        height: auto;
+        transform: none !important;
+        background: none;
+    }
+    .slide {
+        position: relative;
+        display: block !important;
+        visibility: visible !important;
+        opacity: 1 !important;
+        pointer-events: auto !important;
+        width: 1920px;
+        height: 1080px;
+        break-after: page;
+        page-break-after: always;
+    }
+    .slide:last-child {
+        break-after: auto;
+        page-break-after: auto;
+    }
+    .deck-controls {
+        display: none !important;
+    }
+}
+@media (prefers-reduced-motion: reduce) {
+    *,
+    *::before,
+    *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+    }
+}
+
+/* ===========================================
+   WATER: gradient + moving caustic light, shared by every slide
+   =========================================== */
+.water {
+    position: absolute; inset: 0;
+    background: radial-gradient(120% 90% at 70% 0%, var(--water-top) 0%, var(--water) 40%, var(--floor) 100%);
+}
+.caustics {
+    position: absolute; inset: 0; width: 1920px; height: 1080px; max-width: none; max-height: none;
+    mix-blend-mode: screen; opacity: .30;
+    -webkit-mask-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,.6) 55%, transparent 95%);
+            mask-image: linear-gradient(180deg, #000 0%, rgba(0,0,0,.6) 55%, transparent 95%);
+}
+.deck-stage.calm .caustics { opacity: .14; }   /* dimmer light behind dense slides */
+.caustics { transition: opacity 1.2s ease; }
+
+/* ===========================================
+   TYPE ROLES
+   =========================================== */
+.slide { color: var(--light); font-family: var(--font-body); font-weight: 300; }
+.kicker { font-family: var(--font-mono); font-size: 22px; letter-spacing: .2em; text-transform: uppercase; color: var(--glass); }
+.display { font-family: var(--font-display); font-weight: 200; font-variation-settings: 'opsz' 144; letter-spacing: -.035em; line-height: .9; }
+.accent { font-family: var(--font-accent); font-style: italic; font-weight: 400; letter-spacing: -.005em; }
+.body { font-size: 32px; line-height: 1.5; color: var(--dim); }
+.mono { font-family: var(--font-mono); font-size: 20px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.glass { color: var(--glass); }
+.abs { position: absolute; }
+
+/* ===========================================
+   CHROME (real deck chrome only: name, place, page)
+   =========================================== */
+.chrome {
+    position: absolute; left: var(--pad); right: var(--pad); top: 72px; z-index: 2;
+    display: flex; justify-content: space-between;
+    font-family: var(--font-mono); font-size: 20px; letter-spacing: .2em; text-transform: uppercase; color: rgba(205,239,232,.62);
+}
+.progress { position: absolute; left: 0; bottom: 0; height: 3px; width: 0; background: var(--glass); opacity: .6; z-index: 3; transition: width .8s var(--ease); }
+
+/* ===========================================
+   REVEAL ANIMATIONS (staggered with --d on each element)
+   =========================================== */
+.reveal { opacity: 0; transform: translateY(30px); filter: blur(8px);
+    transition: opacity 1.2s var(--ease), transform 1.2s var(--ease), filter 1.2s var(--ease); transition-delay: var(--d, 0s); }
+.slide.visible .reveal { opacity: 1; transform: none; filter: none; }
+
+/* ===========================================
+   SLIDE 1 + 9: COVER / CLOSE
+   =========================================== */
+.cover-title { left: 108px; top: 440px; font-size: 340px; }
+.cover-tag { left: 124px; top: 776px; font-size: 104px; color: var(--glass); }
+.cover-note { right: var(--pad); bottom: 120px; width: 520px; font-size: 26px; line-height: 1.5; color: var(--dim);
+    border-left: 1px solid var(--hair); padding-left: 32px; }
+
+/* ===========================================
+   SLIDE 2: PROBLEM
+   =========================================== */
+.big-stat { left: 100px; top: 250px; font-size: 380px; }
+.stat-caption { left: 124px; top: 640px; width: 760px; font-size: 40px; line-height: 1.4; color: var(--light); }
+.source { left: 124px; top: 820px; }
+.facts { left: 1080px; top: 300px; width: 720px; }
+.fact { padding: 44px 0; border-top: 1px solid var(--hair); }
+.fact:last-child { border-bottom: 1px solid var(--hair); }
+.fact .accent { display: block; font-size: 72px; line-height: 1.08; margin-top: 14px; }
+
+/* ===========================================
+   SLIDE 3: ONE MESSAGE
+   =========================================== */
+.bubble { left: var(--pad); top: 270px; width: 1040px; padding: 52px 60px 44px;
+    background: var(--card); border: 1px solid var(--hair); border-radius: 36px 36px 36px 8px;
+    font-size: 50px; line-height: 1.35; color: var(--light); }
+.bubble .meta { display: block; margin-top: 28px; font-family: var(--font-mono); font-size: 18px; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
+.choices { left: 1330px; top: 250px; font-size: 128px; line-height: 1.12; }
+.choices span { display: block; }
+.choices span:nth-child(2) { color: var(--glass); }
+.dilemma { left: var(--pad); top: 760px; width: 1100px; font-size: 36px; line-height: 1.45; color: var(--dim); }
+.dilemma b { font-weight: 400; color: var(--light); }
+
+/* ===========================================
+   SLIDE 4: WHAT MAREA DOES
+   =========================================== */
+.headline { left: 108px; top: 230px; font-size: 150px; }
+.steps { left: var(--pad); right: var(--pad); top: 560px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 80px; }
+.step svg { width: 64px; height: 64px; stroke: var(--glass); stroke-width: 1.6; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+.step .accent { display: block; font-size: 72px; margin: 22px 0 14px; }
+.step p { font-size: 29px; line-height: 1.5; color: var(--dim); }
+
+/* ===========================================
+   SLIDE 5: HOW IT WORKS (flow)
+   =========================================== */
+.flow { left: var(--pad); right: var(--pad); top: 260px; display: flex; align-items: stretch; gap: 0; }
+.node { width: 300px; height: 350px; padding: 34px 30px; border: 1px solid var(--hair); border-radius: 20px; background: var(--card);
+    display: flex; flex-direction: column; }
+.node .mono { font-size: 17px; }
+.node h3 { font-family: var(--font-accent); font-style: italic; font-weight: 400; font-size: 48px; line-height: 1.02; margin: 16px 0 auto; padding-bottom: 20px; color: var(--light); }
+.node p { font-size: 22px; line-height: 1.45; color: var(--dim); }
+.node.amd { border-color: var(--glass); background: rgba(143, 211, 201, .12); }
+.node.amd h3 { color: var(--glass); }
+.arrow { width: 45px; display: flex; align-items: center; justify-content: center; font-family: var(--font-mono); font-size: 26px; color: var(--glass); }
+.rule-line { left: 108px; top: 680px; font-size: 120px; }
+.rule-note { left: var(--pad); top: 860px; width: 1300px; font-size: 30px; line-height: 1.5; color: var(--dim); }
+
+/* ===========================================
+   SLIDE 6: THE MATH
+   =========================================== */
+.rows { left: var(--pad); top: 260px; width: 1120px; }
+.row { margin-bottom: 64px; }
+.row .num { font-family: var(--font-display); font-weight: 200; font-variation-settings: 'opsz' 144; font-size: 150px; letter-spacing: -.03em; line-height: 1; margin: 10px 0 18px; }
+.bar { height: 14px; border-radius: 7px; background: var(--glass); transform-origin: left; transform: scaleX(0); transition: transform 1.6s var(--ease); transition-delay: var(--d, 0s); }
+.bar.wait { background: rgba(205, 239, 232, .35); }
+.slide.visible .bar { transform: scaleX(1); }
+.delta { left: 1360px; top: 300px; width: 460px; }
+.delta .accent { display: block; font-size: 190px; line-height: 1; color: var(--glass); }
+.delta p { font-size: 32px; line-height: 1.45; color: var(--light); margin-top: 24px; }
+.formula { left: var(--pad); bottom: 110px; width: 1680px; padding-top: 26px; border-top: 1px solid var(--hair);
+    font-family: var(--font-mono); font-size: 21px; letter-spacing: .04em; line-height: 1.9; color: var(--dim); }
+
+/* ===========================================
+   SLIDE 7: PROOF
+   =========================================== */
+.proof { left: var(--pad); right: var(--pad); top: 300px; display: grid; grid-template-columns: repeat(4, 1fr); gap: 0; }
+.cell { padding: 0 40px; border-left: 1px solid var(--hair); }
+.cell:first-child { padding-left: 0; border-left: 0; }
+.cell .num { font-family: var(--font-display); font-weight: 200; font-variation-settings: 'opsz' 144; font-size: 132px; letter-spacing: -.03em; line-height: 1; }
+.cell .num small { font-size: 56px; color: var(--dim); }
+.cell p { margin-top: 26px; font-size: 27px; line-height: 1.5; color: var(--dim); }
+.limits { left: var(--pad); top: 790px; width: 1500px; font-size: 52px; line-height: 1.25; }
+
+/* ===========================================
+   SLIDE 8: WHO IT IS FOR
+   =========================================== */
+.who { left: var(--pad); right: var(--pad); top: 250px; }
+.who-row { display: grid; grid-template-columns: 380px 1fr; align-items: baseline; padding: 46px 0; border-top: 1px solid var(--hair); }
+.who-row:last-child { border-bottom: 1px solid var(--hair); }
+.who-row .display { font-size: 68px; line-height: 1.12; letter-spacing: -.02em; }
+.who-row .note { display: block; font-family: var(--font-accent); font-style: italic; font-size: 40px; letter-spacing: 0; line-height: 1.3; color: var(--glass); margin-top: 14px; }
+
+/* ===========================================
+   SLIDE 9: CLOSE
+   =========================================== */
+.links { left: 124px; top: 940px; display: flex; gap: 56px; font-family: var(--font-mono); font-size: 24px; letter-spacing: .06em; color: var(--light); }
+.built { right: var(--pad); top: 520px; width: 520px; font-size: 28px; line-height: 1.5; color: var(--dim); border-left: 1px solid var(--hair); padding-left: 32px; }
+.built b { display: block; font-family: var(--font-mono); font-weight: 400; font-size: 20px; letter-spacing: .2em; text-transform: uppercase; color: var(--glass); margin-bottom: 10px; }
+
+/* ===========================================
+   INLINE EDITING (press E, or hover the top-left corner)
+   =========================================== */
+.edit-hotzone { position: fixed; top: 0; left: 0; width: 80px; height: 80px; z-index: 10000; cursor: pointer; }
+.edit-toggle { position: fixed; top: 18px; left: 18px; z-index: 10001; padding: 8px 14px; border-radius: 999px; border: 1px solid var(--hair);
+    background: rgba(5, 42, 53, .85); color: var(--light); font: 400 14px var(--font-mono); letter-spacing: .1em; cursor: pointer;
+    opacity: 0; pointer-events: none; transition: opacity .3s ease; }
+.edit-toggle.show, .edit-toggle.active { opacity: 1; pointer-events: auto; }
+body.editing [contenteditable="true"] { outline: 1px dashed rgba(143, 211, 201, .5); outline-offset: 6px; }
+</style>
+</head>
+<body>
+<div class="edit-hotzone" aria-hidden="true"></div>
+<button class="edit-toggle" id="editToggle" title="Edit mode (E)">EDIT · E</button>
+
+<div class="deck-viewport">
+<main class="deck-stage" id="deckStage" aria-label="Marea pitch deck">
+
+    <!-- Shared water: one light for the whole deck -->
+    <div class="water"></div>
+    <svg class="caustics" viewBox="0 0 1920 1080" aria-hidden="true">
+        <filter id="caustic" x="0" y="0" width="100%" height="100%">
+            <feTurbulence type="turbulence" baseFrequency="0.0055 0.008" numOctaves="2" seed="11">
+                <animate attributeName="baseFrequency" dur="16s" values="0.0055 0.008;0.006 0.0088;0.0055 0.008" repeatCount="indefinite"/>
+            </feTurbulence>
+            <feColorMatrix values="0 0 0 0 0.80  0 0 0 0 0.94  0 0 0 0 0.91  -4 0 0 0 1.05"/>
+        </filter>
+        <rect width="1920" height="1080" filter="url(#caustic)"/>
+    </svg>
+
+    <!-- === 1. COVER === -->
+    <section class="slide" data-light="full" aria-label="Cover">
+        <div class="chrome"><span>Marea · La Ceiba, Honduras</span><span>01 / 09</span></div>
+        <h1 class="abs display cover-title reveal">Marea</h1>
+        <p class="abs accent cover-tag reveal" style="--d:.2s">Sell before it spoils.</p>
+        <p class="abs cover-note reveal" style="--d:.45s">A sales copilot for small-scale fish sellers who haggle on WhatsApp. Code does the math. Gemma on AMD GPUs writes the words. The seller decides.</p>
+    </section>
+
+    <!-- === 2. THE PROBLEM === -->
+    <section class="slide" data-light="calm" aria-label="The problem">
+        <div class="chrome"><span>The problem</span><span>02 / 09</span></div>
+        <div class="abs display big-stat reveal">35%</div>
+        <p class="abs stat-caption reveal" style="--d:.15s">of the world's fisheries and aquaculture harvest is lost or wasted every year.</p>
+        <p class="abs mono source reveal" style="--d:.3s">Source: FAO</p>
+        <div class="abs facts">
+            <div class="fact reveal" style="--d:.35s"><span class="mono">01</span><span class="accent">Fresh fish lasts 1 to 3 days.</span></div>
+            <div class="fact reveal" style="--d:.5s"><span class="mono">02</span><span class="accent">Every buyer haggles on WhatsApp.</span></div>
+        </div>
+    </section>
+
+    <!-- === 3. ONE MESSAGE, ONE DECISION === -->
+    <section class="slide" data-light="full" aria-label="One message, one decision">
+        <div class="chrome"><span>One message, one decision</span><span>03 / 09</span></div>
+        <div class="abs bubble reveal">buenas, te doy 700 lps x las 10 lbs de camarón, me las lleva mañana a Sambo Creek?<span class="meta">Buyer · WhatsApp · 9:02</span></div>
+        <div class="abs accent choices"><span class="reveal" style="--d:.35s">Accept?</span><span class="reveal" style="--d:.5s">Counter?</span><span class="reveal" style="--d:.65s">Wait?</span></div>
+        <p class="abs dilemma reveal" style="--d:.8s">L 70 a pound is <b>below the seller's floor</b>. But the shrimp has <b>18 hours of freshness left</b>, and tomorrow it may not sell at all.</p>
+    </section>
+
+    <!-- === 4. WHAT MAREA DOES === -->
+    <section class="slide" data-light="full" aria-label="What Marea does">
+        <div class="chrome"><span>What Marea does</span><span>04 / 09</span></div>
+        <h2 class="abs display headline reveal">Read. Decide. Close.</h2>
+        <div class="abs steps">
+            <div class="step reveal" style="--d:.2s">
+                <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 14h44a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H26l-12 10V46h-4a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z"/><path d="M18 26h28M18 34h18"/></svg>
+                <span class="accent">Read</span>
+                <p>Rules in code pull product, pounds, offer, zone and day out of the buyer's message.</p>
+            </div>
+            <div class="step reveal" style="--d:.35s">
+                <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8v48M14 20h36"/><path d="M14 20 6 38a9 9 0 0 0 16 0zM50 20l-8 18a9 9 0 0 0 16 0z"/><path d="M22 56h20"/></svg>
+                <span class="accent">Decide</span>
+                <p>DECIDE TÚ flags the deals that need the seller and shows the numbers: sell now or wait.</p>
+            </div>
+            <div class="step reveal" style="--d:.5s">
+                <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M8 34l8-8 10 10 22-22 8 8-30 30z"/></svg>
+                <span class="accent">Close</span>
+                <p>One click confirms the order, updates the stock on ice and writes the receipt.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- === 5. HOW IT WORKS === -->
+    <section class="slide" data-light="calm" aria-label="How it works">
+        <div class="chrome"><span>How it works</span><span>05 / 09</span></div>
+        <div class="abs flow">
+            <div class="node reveal" style="--d:.05s"><span class="mono">In</span><h3>Buyer message</h3><p>WhatsApp or Marketplace, pasted as written.</p></div>
+            <div class="arrow reveal" style="--d:.1s">→</div>
+            <div class="node reveal" style="--d:.15s"><span class="mono">Rules in code</span><h3>Read it</h3><p>Product, pounds, offer, zone, day. Flags DECIDE TÚ.</p></div>
+            <div class="arrow reveal" style="--d:.2s">→</div>
+            <div class="node reveal" style="--d:.25s"><span class="mono">pandas</span><h3>Do the math</h3><p>14-day forecast, freshness, sell now or wait.</p></div>
+            <div class="arrow reveal" style="--d:.3s">→</div>
+            <div class="node amd reveal" style="--d:.35s"><span class="mono">AMD Token Factory</span><h3>Gemma on AMD GPUs</h3><p>Writes the reply. Only the words.</p></div>
+            <div class="arrow reveal" style="--d:.4s">→</div>
+            <div class="node reveal" style="--d:.45s"><span class="mono">Out</span><h3>Seller decides</h3><p>Reply, order and receipt, one click each.</p></div>
+        </div>
+        <p class="abs accent rule-line reveal" style="--d:.6s">The model never sets a price.</p>
+        <p class="abs rule-note reveal" style="--d:.75s">Code checks every price the model writes. If one is not in the catalog, Marea falls back to a template and says so.</p>
+    </section>
+
+    <!-- === 6. THE MATH === -->
+    <section class="slide" data-light="calm" aria-label="The math">
+        <div class="chrome"><span>The math, in one message</span><span>06 / 09</span></div>
+        <div class="abs rows">
+            <div class="row reveal" style="--d:.05s">
+                <span class="mono">Accept L 70 a pound</span>
+                <div class="num">L 1,797</div>
+                <div class="bar" style="width:1120px; --d:.3s"></div>
+            </div>
+            <div class="row reveal" style="--d:.2s">
+                <span class="mono">Wait for list price</span>
+                <div class="num">L 1,097</div>
+                <div class="bar wait" style="width:684px; --d:.45s"></div>
+            </div>
+        </div>
+        <div class="abs delta reveal" style="--d:.6s">
+            <span class="accent">+L 700</span>
+            <p>by selling now, because 23 pounds would spoil before other buyers take them.</p>
+        </div>
+        <div class="abs formula reveal" style="--d:.8s">
+            Accept = offer × pounds + list price × what other buyers still take<br>
+            Wait&nbsp;&nbsp; = list price × what other buyers take before the lot spoils
+        </div>
+    </section>
+
+    <!-- === 7. PROOF === -->
+    <section class="slide" data-light="calm" aria-label="Proof">
+        <div class="chrome"><span>Proof</span><span>07 / 09</span></div>
+        <div class="abs proof">
+            <div class="cell reveal" style="--d:.05s"><div class="num">30<small>/30</small></div><p>synthetic buyer messages read correctly: typos, "lps", numbers in words, several products.</p></div>
+            <div class="cell reveal" style="--d:.15s"><div class="num">4<small>/4</small></div><p>tests on the sell-now-or-wait math.</p></div>
+            <div class="cell reveal" style="--d:.25s"><div class="num">L 3,110</div><p>cash today when five buyers want the same shrimp, vs. L 1,590 answering in order.</p></div>
+            <div class="cell reveal" style="--d:.35s"><div class="num">MIT</div><p>open-source repo and a live app anyone can try.</p></div>
+        </div>
+        <p class="abs accent limits reveal" style="--d:.55s">Honest limits: all data is synthetic, and there is no WhatsApp integration yet. The seller copies each message.</p>
+    </section>
+
+    <!-- === 8. WHO IT IS FOR === -->
+    <section class="slide" data-light="calm" aria-label="Who it is for">
+        <div class="chrome"><span>Who it is for</span><span>08 / 09</span></div>
+        <div class="abs who">
+            <div class="who-row reveal" style="--d:.05s"><span class="mono">First users</span><div class="display">Artisanal fish sellers and fishing cooperatives on the Honduran coast.</div></div>
+            <div class="who-row reveal" style="--d:.2s"><span class="mono">Next</span><div class="display">Anyone who sells something perishable on WhatsApp: produce, bakeries, dairy.</div></div>
+            <div class="who-row reveal" style="--d:.35s"><span class="mono">Business model</span><div class="display">A low monthly subscription, per seller or per cooperative.<span class="note">A hypothesis we still have to validate.</span></div></div>
+        </div>
+    </section>
+
+    <!-- === 9. CLOSE === -->
+    <section class="slide" data-light="full" aria-label="Close">
+        <div class="chrome"><span>Marea · La Ceiba, Honduras</span><span>09 / 09</span></div>
+        <h2 class="abs display cover-title reveal" style="top:300px">Marea</h2>
+        <p class="abs accent cover-tag reveal" style="--d:.2s; top:636px">Sell before it spoils.</p>
+        <div class="abs built reveal" style="--d:.4s"><b>Built on AMD</b>Gemma-4-31B-IT on AMD GPUs through AMD Token Factory. Rules and math in Python and pandas.</div>
+        <div class="abs links reveal" style="--d:.55s"><span>marea-copilot.streamlit.app</span><span>github.com/xoradato/marea</span></div>
+    </section>
+
+    <div class="progress" id="progress"></div>
+</main>
+</div>
+
+<script>
+/* ===========================================
+   SLIDE PRESENTATION CONTROLLER
+   Keys: → ← Space PageUp PageDown Home End · wheel · swipe
+   =========================================== */
+class SlidePresentation {
+    constructor() {
+        this.slides = [...document.querySelectorAll('.slide')];
+        this.stage = document.getElementById('deckStage');
+        this.progress = document.getElementById('progress');
+        this.current = 0;
+        this.lock = false;
+        this.setupStageScale();
+        this.setupKeyboardNav();
+        this.setupWheelNav();
+        this.setupTouchNav();
+        const fromHash = parseInt(location.hash.replace('#', ''), 10);
+        this.show(Number.isFinite(fromHash) ? fromHash - 1 : 0);
+    }
+
+    /* Scale the 1920×1080 stage as a whole; letterbox, never reflow */
+    setupStageScale() {
+        const scale = () => {
+            const f = Math.min(innerWidth / 1920, innerHeight / 1080);
+            this.stage.style.transform = `translate(${(innerWidth - 1920 * f) / 2}px, ${(innerHeight - 1080 * f) / 2}px) scale(${f})`;
+        };
+        scale();
+        addEventListener('resize', scale);
+    }
+
+    setupKeyboardNav() {
+        document.addEventListener('keydown', (e) => {
+            if (document.body.classList.contains('editing')) return;
+            if (['ArrowRight', 'ArrowDown', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); this.show(this.current + 1); }
+            if (['ArrowLeft', 'ArrowUp', 'PageUp'].includes(e.key)) { e.preventDefault(); this.show(this.current - 1); }
+            if (e.key === 'Home') this.show(0);
+            if (e.key === 'End') this.show(this.slides.length - 1);
+        });
+    }
+
+    setupWheelNav() {
+        addEventListener('wheel', (e) => {
+            if (this.lock || document.body.classList.contains('editing') || Math.abs(e.deltaY) < 20) return;
+            this.lock = true;
+            this.show(this.current + (e.deltaY > 0 ? 1 : -1));
+            setTimeout(() => { this.lock = false; }, 700);
+        }, { passive: true });
+    }
+
+    setupTouchNav() {
+        let x0 = null;
+        addEventListener('touchstart', (e) => { x0 = e.touches[0].clientX; }, { passive: true });
+        addEventListener('touchend', (e) => {
+            if (x0 === null) return;
+            const dx = e.changedTouches[0].clientX - x0;
+            if (Math.abs(dx) > 50) this.show(this.current + (dx < 0 ? 1 : -1));
+            x0 = null;
+        });
+    }
+
+    show(i) {
+        this.current = Math.max(0, Math.min(i, this.slides.length - 1));
+        this.slides.forEach((s, k) => {
+            s.classList.toggle('active', k === this.current);
+            s.classList.toggle('visible', k === this.current);
+        });
+        /* Dense slides get calmer light so the text stays easy to read */
+        this.stage.classList.toggle('calm', this.slides[this.current].dataset.light === 'calm');
+        this.progress.style.width = `${((this.current + 1) / this.slides.length) * 100}%`;
+        history.replaceState(null, '', `#${this.current + 1}`);
+    }
+}
+
+/* ===========================================
+   INLINE EDITOR: E toggles, edits saved per element in localStorage, Ctrl+S downloads the file
+   =========================================== */
+class InlineEditor {
+    constructor() {
+        this.isActive = false;
+        this.key = 'marea-deck-edits';
+        this.nodes = [...document.querySelectorAll('.slide h1, .slide h2, .slide h3, .slide p, .slide .accent, .slide .num, .slide .display, .slide .bubble, .slide .mono, .slide .formula')];
+        this.restore();
+        this.toggle = document.getElementById('editToggle');
+        this.setupHover();
+    }
+    restore() {
+        let saved = {};
+        try { saved = JSON.parse(localStorage.getItem(this.key) || '{}'); } catch (e) { saved = {}; }
+        this.nodes.forEach((n, i) => { if (saved[i] !== undefined) n.innerHTML = saved[i]; });
+    }
+    save() {
+        const out = {};
+        this.nodes.forEach((n, i) => { out[i] = n.innerHTML; });
+        try { localStorage.setItem(this.key, JSON.stringify(out)); } catch (e) { /* storage blocked: edits stay on screen only */ }
+    }
+    toggleEditMode() {
+        this.isActive = !this.isActive;
+        document.body.classList.toggle('editing', this.isActive);
+        this.toggle.classList.toggle('active', this.isActive);
+        this.toggle.textContent = this.isActive ? 'DONE · E' : 'EDIT · E';
+        this.nodes.forEach((n) => n.setAttribute('contenteditable', this.isActive ? 'true' : 'false'));
+        if (!this.isActive) this.save();
+    }
+    download() {
+        this.save();
+        const clone = document.documentElement.cloneNode(true);
+        clone.querySelectorAll('[contenteditable]').forEach((n) => n.removeAttribute('contenteditable'));
+        clone.querySelector('body').classList.remove('editing');
+        const blob = new Blob(['<!DOCTYPE html>\n' + clone.outerHTML], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'marea-deck.html';
+        a.click();
+    }
+    setupHover() {
+        const hot = document.querySelector('.edit-hotzone');
+        let t = null;
+        const show = () => { clearTimeout(t); this.toggle.classList.add('show'); };
+        const hide = () => { t = setTimeout(() => { if (!this.isActive) this.toggle.classList.remove('show'); }, 400); };
+        hot.addEventListener('mouseenter', show);
+        hot.addEventListener('mouseleave', hide);
+        this.toggle.addEventListener('mouseenter', show);
+        this.toggle.addEventListener('mouseleave', hide);
+        hot.addEventListener('click', () => this.toggleEditMode());
+        this.toggle.addEventListener('click', () => this.toggleEditMode());
+        document.addEventListener('keydown', (e) => {
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); this.download(); return; }
+            if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) this.toggleEditMode();
+        });
+    }
+}
+
+const deck = new SlidePresentation();
+const editor = new InlineEditor();
+</script>
+</body>
+</html>
