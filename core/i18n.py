@@ -296,6 +296,16 @@ TEXT = {
                       ". Marea no envía nada sola: copie cada mensaje en WhatsApp."),
     "flash_failed": ("The model call failed, so these are templates: {e}",
                      "Falló el modelo; estas son plantillas: {e}"),
+    "post_title": ("Post today's catch", "Publicar lo de hoy"),
+    "post_intro": ("One post for your WhatsApp Status or Marketplace, with today's specials first. "
+                   "Code checks every price in the draft against your catalog.",
+                   "Una publicación para su estado de WhatsApp o Marketplace, con los especiales primero. "
+                   "El código revisa cada precio del borrador contra su catálogo."),
+    "post_btn": ("Draft post", "Redactar publicación"),
+    "post_caption": (". Copy it into your Status or Marketplace listing.",
+                     ". Cópiela en su estado o en su publicación de Marketplace."),
+    "post_failed": ("The model call failed, so this is a template: {e}",
+                    "Falló el modelo; esta es una plantilla: {e}"),
     # Footer
     "footer_on": ("Synthetic data. The language model runs on AMD GPUs through AMD Token Factory.",
                   "Datos sintéticos. El modelo de lenguaje corre en GPUs AMD con AMD Token Factory."),
@@ -369,8 +379,11 @@ BUYER_TYPES = {
 SOURCES = [  # technical source captions from the copilot, in English, with their Spanish version
     ("offline template (no AMD API key set)", "plantilla sin conexión (sin clave de AMD)"),
     ("offline template (model call failed)", "plantilla sin conexión (falló el modelo)"),
+    ("offline template (model wrote a price not in the catalog)",
+     "plantilla sin conexión (el modelo escribió un precio que no está en el catálogo)"),
     ("(some messages from template)", "(algunos mensajes de plantilla)"),
     (" on AMD Token Factory", " en AMD Token Factory"),
+    ("template", "plantilla"),
 ]
 
 DAYS = (["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"])

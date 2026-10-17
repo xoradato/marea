@@ -543,6 +543,21 @@ with tab_recs:
         st.divider()
     if not fine.empty:
         st.caption(t("ok_line", names=", ".join(fine["name"])))
+    # One post for the seller's WhatsApp Status or Marketplace with what is on ice today
+    st.markdown("#### :material/campaign: " + t("post_title"))
+    st.caption(t("post_intro"))
+    if st.button(t("post_btn"), icon=":material/edit_note:"):
+        with st.spinner(t("drafting")):
+            st.session_state.post = copilot.post_today(table, settings)
+    if "post" in st.session_state:
+        post = st.session_state.post
+        st.code(post.text, language=None, wrap_lines=True)
+        st.link_button(t("open_whatsapp"), wa_link(post.text), icon=":material/send:")
+        st.caption(t("source", s=i18n.source(post.source, lang))
+                   + (f" · {post.seconds:.1f} s" if post.seconds else "") + t("post_caption"))
+        if post.error:
+            st.warning(t("post_failed", e=post.error))
+    st.divider()
     if st.button(t("explain_btn")):
         with st.spinner(t("asking")):
             st.session_state.recs = copilot.recommendations(table, lang)

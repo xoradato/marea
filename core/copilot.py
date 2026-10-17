@@ -1,4 +1,5 @@
 """Prompts for the model on AMD, with template fallbacks so the demo never breaks."""
+import re
 from dataclasses import dataclass
 
 from core import i18n, llm
@@ -277,3 +278,60 @@ def flash_sale_messages(lot, buyers):
     if len(drafted) < len(templates):  # keep the template for any buyer the model skipped
         return {**templates, **drafted}, Result("", source=_source() + " (some messages from template)", seconds=secs)
     return drafted, Result("", source=_source(), seconds=secs)
+
+
+POST_SYSTEM = """You write one post for a small seafood seller in Honduras, for their WhatsApp Status or a Facebook Marketplace listing.
+Rules:
+- Spanish, the way a Honduran market seller writes. Friendly and short: at most 8 lines.
+- Use only the products, prices, zones and hours in TODAY. Never invent products, prices, discounts, catch times or claims.
+- List today's specials first and say the special price is only for today.
+- One product per line with its price per pound. End with how to order (by WhatsApp) and the delivery zones.
+- At most 3 emoji. No hashtags.
+Output only the post."""
+
+# "L 78", "L.78", "Lps 78", "78 lempiras": every amount the model writes
+PRICE_RE = re.compile(r"\bL(?:ps?)?\.?\s*(\d[\d,]*(?:\.\d+)?)|(\d[\d,]*(?:\.\d+)?)\s*(?:lempiras|lps)\b", re.I)
+
+
+def _today_facts(table, settings):
+    menu = _menu(table)
+    lines = [f"- {n}: L {p}/lb" + (" (today's special, today only)" if s else "") for n, p, s in menu]
+    zones = ", ".join(f"{z} (delivery L {fee})" if fee else f"{z} (free delivery)"
+                      for z, fee in settings["delivery_zones"].items())
+    return menu, ("TODAY:\n" + "\n".join(lines) + f"\nSeller: {settings['business_name']}, based in "
+                  f"{settings['home_base']}.\nDelivery zones: {zones}. Delivery hours: {settings['delivery_hours']}. "
+                  f"Minimum order: {settings['min_order_lbs']} lb.")
+
+
+def _template_post(menu, settings, source, error=None):
+    if not menu:
+        return Result("¡Buenas! Por hoy ya se terminó todo. Le aviso cuando llegue el próximo lote.",
+                      source=source, error=error)
+    specials = [f"{n} a L {p} la libra" for n, p, s in menu if s]
+    rest = [f"• {n.capitalize()}: L {p} la libra" for n, p, s in menu if not s]
+    lines = [f"🐟 Pescado y mariscos frescos hoy en {settings['home_base']}"]
+    if specials:
+        lines.append(f"⭐ Precio especial solo por hoy: {_join(specials, 'y')}")
+    lines += rest
+    lines.append(f"🚚 Entregas a {_join(list(settings['delivery_zones']), 'y')}. "
+                 f"Pedidos por WhatsApp a {settings['business_name']}.")
+    return Result("\n".join(lines), source=source, error=error)
+
+
+def post_today(table, settings):
+    """A WhatsApp Status / Marketplace post with today's catch. Code checks every price the model writes."""
+    menu, facts = _today_facts(table, settings)
+    if not menu or not llm.is_configured():
+        return _template_post(menu, settings, "offline template (no AMD API key set)" if menu else "template")
+    try:
+        text, secs = llm.chat([
+            {"role": "system", "content": POST_SYSTEM},
+            {"role": "user", "content": facts},
+        ], max_tokens=400)
+    except llm.LLMError as e:
+        return _template_post(menu, settings, "offline template (model call failed)", error=str(e))
+    allowed = {float(p) for _, p, _ in menu} | {float(f) for f in settings["delivery_zones"].values()}
+    written = {float((a or b).replace(",", "")) for a, b in PRICE_RE.findall(text)}
+    if not written <= allowed:  # the model wrote a price that is not in today's catalog: do not show it
+        return _template_post(menu, settings, "offline template (model wrote a price not in the catalog)")
+    return Result(_clean(text), source=_source(), seconds=secs)
