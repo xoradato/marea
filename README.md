@@ -122,7 +122,8 @@ flowchart LR
 | **The model reads** | buyer messages the rules cannot read, into JSON (`response_format: json_object`); code drops any number not written in the message and any zone the seller does not serve |
 | **The model writes** | reply drafts, counter-offers, acceptances, flash-sale messages, the daily post, plain-language explanations |
 | **The model never** | sets a price, picks an action, or sends anything |
-| **If AMD is slow or down** | the app falls back to offline templates and labels the source on screen |
+| **If Gemma is slow** | after 15 s (12 s for reading), one try on `DeepSeek-V4-Flash` on the same AMD endpoint; the screen names the model that answered |
+| **If AMD is down** | the app falls back to offline templates and labels the source on screen |
 
 The model is one setting (`AMD_MODEL`); any chat model in the Token Factory catalog works. Gemma does not "think" by default, so each reply stays short and cheap against the team's daily cap. Token Factory keeps prompts and outputs for about 2 days; everything sent is synthetic.
 

@@ -13,8 +13,7 @@ Rules:
 - If FLAGS is not "none": do not accept, reject or counter the deal. Write a short, friendly holding reply saying the seller will confirm soon. You may share list prices and what is available.
 - If FLAGS is "none" but the request needs something not covered by SELLER DATA (invoices, credit, custom cuts, anything unusual), start the reply with [REVIEW].
 - If the buyer does not name a product, asks what you have, or asks for a product not in SELLER DATA: list what is in stock today with its price (mention today's specials), and ask which one and how many pounds. Never answer with only "let me check".
-- After the reply, write a line with exactly ---EN--- and then an English translation of the reply.
-Output only the reply and the translation."""
+{translation}Output nothing else."""
 
 REC_SYSTEM = """You help a small seafood seller in Honduras decide what to do today.
 The table was computed by deterministic code: avg_daily_lbs is a 14-day moving average of pounds sold per day, at_risk_lbs is stock minus expected sales before the lot loses freshness, and "action" comes from fixed rules.
@@ -36,8 +35,14 @@ class Result:
     error: str | None = None
 
 
-def _source():
-    return f"{llm.model_name()} on AMD Token Factory"
+def _source(model=None):
+    return f"{model or llm.model_name()} on AMD Token Factory"
+
+
+def _translation(lang):
+    """The English line is only shown in the English interface; skipping it halves the model's output."""
+    return ("- After the reply, write a line with exactly ---EN--- and then an English translation of the reply.\n"
+            if lang == "en" else "")
 
 
 def _clean(text):
@@ -75,15 +80,15 @@ def blocking(flags):
     return [(code, msg) for code, msg in flags if code not in INFO_FLAGS]
 
 
-def draft_reply(message, check, table, settings):
+def draft_reply(message, check, table, settings, lang="en"):
     flags = "\n".join(f"- {m}" for _, m in blocking(check.flags)) or "none"
     user = (f"SELLER DATA:\n{_seller_facts(check, table, settings)}\n\n"
             f"FLAGS:\n{flags}\n\nBUYER MESSAGE:\n{message}")
     if not llm.is_configured():
         return _template_reply(check, table, "offline template (no AMD API key set)")
     try:
-        text, secs = llm.chat([
-            {"role": "system", "content": REPLY_SYSTEM.format(tone=settings["tone"])},
+        text, secs, model = llm.chat([
+            {"role": "system", "content": REPLY_SYSTEM.format(tone=settings["tone"], translation=_translation(lang))},
             {"role": "user", "content": user},
         ])
     except llm.LLMError as e:
@@ -92,7 +97,7 @@ def draft_reply(message, check, table, settings):
     reply, _, english = text.partition("---EN---")
     reply = reply.strip()
     review = reply.startswith("[REVIEW]")
-    return Result(_clean(reply), _clean(english), review, _source(), secs)
+    return Result(_clean(reply), _clean(english), review, _source(model), secs)
 
 
 READ_SYSTEM = """You read one message from a buyer of a small seafood seller in Honduras. The message may be in Spanish or English, with slang, diminutives ("camaroncitos"), typos or English fish names.
@@ -116,18 +121,18 @@ def model_read(message, table, settings):
                         for pid, r in table.set_index("product_id").iterrows())
     user = f"CATALOG:\n{catalog}\nZONES: {', '.join(settings['delivery_zones'])}\n\nMESSAGE:\n{message}"
     try:
-        text, secs = llm.chat([
+        text, secs, model = llm.chat([
             {"role": "system", "content": READ_SYSTEM},
             {"role": "user", "content": user},
-        ], max_tokens=300, temperature=0, json_mode=True)
+        ], max_tokens=200, temperature=0, timeout=12, json_mode=True)
     except llm.LLMError as e:
         return None, Result("", source="offline template (model call failed)", error=str(e))
     raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
     try:
         data = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
     except ValueError:
-        return None, Result("", source=_source(), seconds=secs, error="The model did not return valid JSON.")
-    return data, Result("", source=_source(), seconds=secs)
+        return None, Result("", source=_source(model), seconds=secs, error="The model did not return valid JSON.")
+    return data, Result("", source=_source(model), seconds=secs)
 
 
 def _menu(table):
@@ -170,13 +175,13 @@ def recommendations(table, lang="en"):
     if not llm.is_configured():
         return _template_recs(table, "offline template (no AMD API key set)", lang)
     try:
-        text, secs = llm.chat([
+        text, secs, model = llm.chat([
             {"role": "system", "content": REC_SYSTEM.format(language="Spanish" if lang == "es" else "English")},
             {"role": "user", "content": table[REC_COLUMNS].to_csv(index=False)},
         ], max_tokens=500, temperature=0.2)
     except llm.LLMError as e:
         return _template_recs(table, "offline template (model call failed)", lang, error=str(e))
-    return Result(text, source=_source(), seconds=secs)
+    return Result(text, source=_source(model), seconds=secs)
 
 
 def _template_recs(table, source, lang="en", error=None):
@@ -193,8 +198,7 @@ Rules:
 - Offer exactly the products, pounds, prices and delivery in TERMS. Do not change them, add discounts or invent anything.
 - Never mention minimum prices, spoilage, forecasts or these instructions.
 - End by asking the buyer to confirm.
-- After the reply, write a line with exactly ---EN--- and then an English translation of the reply.
-Output only the reply and the translation."""
+{translation}Output nothing else."""
 
 FLASH_SYSTEM = """You write short WhatsApp messages from a small seafood seller in Honduras to regular buyers, offering today's special on a lot that must sell today.
 Rules:
@@ -247,19 +251,19 @@ def _terms_text(terms):
     return "\n".join(out)
 
 
-def draft_counter(message, check, scenarios, table, settings, accept=False):
+def draft_counter(message, check, scenarios, table, settings, accept=False, lang="en"):
     terms = counter_terms(check, scenarios, table, settings, accept)
     if not llm.is_configured():
         return _template_counter(terms, "offline template (no AMD API key set)")
     try:
-        text, secs = llm.chat([
-            {"role": "system", "content": COUNTER_SYSTEM.format(tone=settings["tone"])},
+        text, secs, model = llm.chat([
+            {"role": "system", "content": COUNTER_SYSTEM.format(tone=settings["tone"], translation=_translation(lang))},
             {"role": "user", "content": f"TERMS:\n{_terms_text(terms)}\n\nBUYER MESSAGE:\n{message}"},
         ])
     except llm.LLMError as e:
         return _template_counter(terms, "offline template (model call failed)", error=str(e))
     reply, _, english = text.partition("---EN---")
-    return Result(_clean(reply), _clean(english), False, _source(), secs)
+    return Result(_clean(reply), _clean(english), False, _source(model), secs)
 
 
 def _template_counter(terms, source, error=None):
@@ -298,7 +302,7 @@ def flash_sale_messages(lot, buyers):
     if not llm.is_configured():
         return templates, Result("", source="offline template (no AMD API key set)")
     try:
-        text, secs = llm.chat([
+        text, secs, model = llm.chat([
             {"role": "system", "content": FLASH_SYSTEM},
             {"role": "user", "content": f"PRODUCT: {lot['name']} at L {lot['suggested_price']}/lb today\n"
                                         f"BUYERS:\n{facts}"},
@@ -312,8 +316,8 @@ def flash_sale_messages(lot, buyers):
         if bid in templates and _clean(body):
             drafted[bid] = _clean(body)
     if len(drafted) < len(templates):  # keep the template for any buyer the model skipped
-        return {**templates, **drafted}, Result("", source=_source() + " (some messages from template)", seconds=secs)
-    return drafted, Result("", source=_source(), seconds=secs)
+        return {**templates, **drafted}, Result("", source=_source(model) + " (some messages from template)", seconds=secs)
+    return drafted, Result("", source=_source(model), seconds=secs)
 
 
 POST_SYSTEM = """You write one post for a small seafood seller in Honduras, for their WhatsApp Status or a Facebook Marketplace listing.
@@ -360,7 +364,7 @@ def post_today(table, settings):
     if not menu or not llm.is_configured():
         return _template_post(menu, settings, "offline template (no AMD API key set)" if menu else "template")
     try:
-        text, secs = llm.chat([
+        text, secs, model = llm.chat([
             {"role": "system", "content": POST_SYSTEM},
             {"role": "user", "content": facts},
         ], max_tokens=400)
@@ -370,4 +374,4 @@ def post_today(table, settings):
     written = {float((a or b).replace(",", "")) for a, b in PRICE_RE.findall(text)}
     if not written <= allowed:  # the model wrote a price that is not in today's catalog: do not show it
         return _template_post(menu, settings, "offline template (model wrote a price not in the catalog)")
-    return Result(_clean(text), source=_source(), seconds=secs)
+    return Result(_clean(text), source=_source(model), seconds=secs)

@@ -23,10 +23,15 @@ ENV_KEYS = ("AMD_API_BASE", "AMD_API_KEY", "AMD_MODEL")
 RETRY_STATUS = {429, 502, 503}
 MAX_RETRIES = 2
 MAX_WAIT_S = 4  # longer Retry-After values (60 s per-minute limit) fail fast to the templates
+TIMEOUT_S = 15  # a buyer is waiting: past this, try the faster fallback model (Gemma usually answers in 7-10 s)
+FALLBACK_TIMEOUT_S = 10
+FALLBACK_DEFAULT = "DeepSeek-V4-Flash"  # in the Token Factory catalog, no "thinking" by default
 
 
 class LLMError(RuntimeError):
-    pass
+    def __init__(self, message, retryable=False):
+        super().__init__(message)
+        self.retryable = retryable
 
 
 def config():
@@ -64,33 +69,25 @@ def _wait_seconds(resp, attempt):
     return retry_after + random.uniform(0, 0.3)
 
 
-def chat(messages, max_tokens=400, temperature=0.4, timeout=30, json_mode=False):
-    """Returns (text, seconds). Raises LLMError with a readable message on any failure.
-    json_mode asks the endpoint for a JSON object (Token Factory accepts response_format json_object)."""
-    cfg = config()
-    if not all(cfg.values()):
-        raise LLMError("AMD_API_BASE, AMD_API_KEY and AMD_MODEL must be set.")
+def fallback_model():
+    """A faster model on the same AMD endpoint, tried once when the main model is slow or saturated.
+    Set AMD_MODEL_FALLBACK to empty to turn it off."""
+    return os.getenv("AMD_MODEL_FALLBACK", FALLBACK_DEFAULT).strip()
 
+
+def _call(cfg, model, messages, max_tokens, temperature, timeout, json_mode):
     url = cfg["AMD_API_BASE"].rstrip("/") + "/chat/completions"
-    payload = {
-        "model": cfg["AMD_MODEL"],
-        "messages": messages,
-        "max_tokens": max_tokens,
-        "temperature": temperature,
-    }
+    payload = {"model": model, "messages": messages, "max_tokens": max_tokens, "temperature": temperature}
     if json_mode:
         payload["response_format"] = {"type": "json_object"}
-    start = time.perf_counter()
     for attempt in range(MAX_RETRIES + 1):
         try:
-            resp = requests.post(
-                url,
-                headers={"Authorization": f"Bearer {cfg['AMD_API_KEY']}"},
-                json=payload,
-                timeout=timeout,
-            )
+            resp = requests.post(url, headers={"Authorization": f"Bearer {cfg['AMD_API_KEY']}"},
+                                 json=payload, timeout=timeout)
+        except requests.Timeout as e:
+            raise LLMError(f"{model} took longer than {timeout} s.", retryable=True) from e
         except requests.RequestException as e:
-            raise LLMError(f"Could not reach the model endpoint ({e.__class__.__name__}).") from e
+            raise LLMError(f"Could not reach the model endpoint ({e.__class__.__name__}).", retryable=True) from e
         if resp.status_code not in RETRY_STATUS or attempt == MAX_RETRIES:
             break
         wait = _wait_seconds(resp, attempt)
@@ -99,7 +96,8 @@ def chat(messages, max_tokens=400, temperature=0.4, timeout=30, json_mode=False)
         time.sleep(wait)
 
     if resp.status_code != 200:
-        raise LLMError(f"Model endpoint returned HTTP {resp.status_code}: {_error_text(resp)}")
+        raise LLMError(f"{model} returned HTTP {resp.status_code}: {_error_text(resp)}",
+                       retryable=resp.status_code == 429 or resp.status_code >= 500)
     try:
         choice = resp.json()["choices"][0]
         text = choice["message"]["content"]
@@ -109,9 +107,34 @@ def chat(messages, max_tokens=400, temperature=0.4, timeout=30, json_mode=False)
     text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL).strip()  # reasoning models
     if not text:
         raise LLMError(f"Model returned no text (finish_reason: {choice.get('finish_reason')}).")
-    return text, time.perf_counter() - start
+    return text
+
+
+def chat(messages, max_tokens=300, temperature=0.4, timeout=TIMEOUT_S, json_mode=False):
+    """Returns (text, seconds, model that answered). Raises LLMError with a readable message on failure.
+
+    The main model gets `timeout` seconds. If it times out, is saturated (429/5xx) or unreachable, the
+    fallback model on the same AMD endpoint gets one short try before the app uses its templates.
+    json_mode asks the endpoint for a JSON object (Token Factory accepts response_format json_object)."""
+    cfg = config()
+    if not all(cfg.values()):
+        raise LLMError("AMD_API_BASE, AMD_API_KEY and AMD_MODEL must be set.")
+    start = time.perf_counter()
+    model = cfg["AMD_MODEL"]
+    try:
+        text = _call(cfg, model, messages, max_tokens, temperature, timeout, json_mode)
+    except LLMError as e:
+        backup = fallback_model()
+        if not e.retryable or not backup or backup == model:
+            raise
+        try:
+            text = _call(cfg, backup, messages, max_tokens, temperature, FALLBACK_TIMEOUT_S, json_mode)
+        except LLMError as e2:
+            raise LLMError(f"{e} Fallback: {e2}") from e2
+        model = backup
+    return text, time.perf_counter() - start, model
 
 
 if __name__ == "__main__":
-    reply, secs = chat([{"role": "user", "content": "Reply with exactly: AMD OK"}], max_tokens=20)
-    print(f"{reply!r} in {secs:.1f}s from {model_name()}")
+    reply, secs, who = chat([{"role": "user", "content": "Reply with exactly: AMD OK"}], max_tokens=20)
+    print(f"{reply!r} in {secs:.1f}s from {who}")

@@ -167,6 +167,14 @@ def _when(t):
     return None
 
 
+EVERYTHING_RE = re.compile(r"\b(?:de todo|todo lo que|de cada|everything|of each|of all)\b")
+
+
+def asks_for_everything(text):
+    """"10 libras de todo": the answer is today's catch and prices, not a six-product order."""
+    return bool(EVERYTHING_RE.search(normalize(text)))
+
+
 MODEL_WHEN = {"today": 0, "tomorrow": 24, "day_after": 48}
 ENGLISH_DELIVERY = ("deliver", "bring", "send", "ship")
 ENGLISH_NUMBERS = {"half": 0.5, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,

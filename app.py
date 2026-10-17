@@ -243,7 +243,7 @@ def read_message(msg):
     """Rules first. If they find no catalog product, Gemma on AMD reads the message (once per message,
     kept in the session) and code keeps only what it can verify. Returns (check, model read or None)."""
     check = guard.check_message(msg, table, settings, lang)
-    if check.items or not llm.is_configured():
+    if check.items or not llm.is_configured() or guard.asks_for_everything(msg):
         return check, None
     if msg not in st.session_state.model_reads:
         with st.spinner(t("reading")):
@@ -261,7 +261,7 @@ def read_caption(read):
     res = read["res"]
     secs = f" ({res.seconds:.1f} s)" if res.seconds else ""
     if not read["used"]:
-        return t("model_read_none") + secs
+        return t("model_read_none").rstrip(".") + secs + "."
     return (t("model_read", s=i18n.source(res.source, lang)) + secs + ". "
             + (t("model_dropped", d=", ".join(read["dropped"])) if read["dropped"] else t("model_kept")))
 
@@ -275,7 +275,7 @@ with tab_reply:
         else:
             check, _ = read_message(msg)
             with st.spinner(t("drafting")):
-                draft = copilot.draft_reply(msg, check, table, settings)
+                draft = copilot.draft_reply(msg, check, table, settings, lang)
             st.session_state.active = msg
             st.session_state.replies = {"hold": draft}
             st.session_state.receipt = None
@@ -330,7 +330,7 @@ with tab_reply:
                 if mode != "hold" and cache_key not in st.session_state.replies:
                     with st.spinner(t("drafting")):
                         st.session_state.replies[cache_key] = copilot.draft_counter(
-                            active, check, sc, table, settings, accept=(mode == "accept"))
+                            active, check, sc, table, settings, accept=(mode == "accept"), lang=lang)
                 draft = hold if mode == "hold" else st.session_state.replies[cache_key]
             else:
                 draft = hold
