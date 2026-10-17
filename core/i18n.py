@@ -212,7 +212,15 @@ TEXT = {
     "reserved": ("{n} orders reserved. Stock, dashboard and today's actions are updated.",
                  "{n} pedidos apartados. El stock, el panel y las acciones de hoy ya están actualizados."),
     # Dashboard
-    "session_title": ("This session with Marea", "Esta sesión con Marea"),
+    "session_title": ("Today with Marea", "Hoy con Marea"),
+    "kpi_title": ("Last 30 days", "Últimos 30 días"),
+    "numbers_title": ("Your numbers on this order", "Sus números en este pedido"),
+    "deal_line": ("If you accept as written: order L {rev}, cost L {cost}, gross profit L {profit} ({m}), "
+                  "L {vs} against your list price.",
+                  "Si acepta tal como lo pide: pedido L {rev}, costo L {cost}, ganancia bruta L {profit} ({m}), "
+                  "L {vs} frente a su precio de lista."),
+    "assumptions": ("Assumptions", "Supuestos"),
+    "ok_line": ("In line with demand, nothing to do: {names}.", "Van de acuerdo con la demanda, nada que hacer: {names}."),
     "orders": ("Orders confirmed", "Pedidos confirmados"),
     "sales": ("Sales", "Ventas"),
     "rescued": ("Sold from lots at risk", "Vendido de lotes en riesgo"),

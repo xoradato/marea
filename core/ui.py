@@ -78,6 +78,11 @@ CSS = f"""
   background: rgba(128, 160, 170, 0.12); border-radius: 12px; padding: 12px 16px;
 }}
 [data-testid="stMetricValue"] {{ font-variant-numeric: tabular-nums; }}
+/* Layout (minimalist-ui): readable width, calm heading scale, room between sections */
+[data-testid="stMainBlockContainer"] {{ max-width: 1120px; }}
+[data-testid="stMain"] h3 {{ font-size: 1.3rem; font-weight: 800; padding-top: 1.4rem; }}
+[data-testid="stMain"] h4 {{ font-size: 1.05rem; font-weight: 800; padding-top: 0.6rem; }}
+[data-testid="stHeaderActionElements"] {{ display: none; }}
 [data-baseweb="tab"] {{ font-weight: 700; }}
 [data-baseweb="tab"][aria-selected="true"] p {{ color: inherit; }}
 </style>

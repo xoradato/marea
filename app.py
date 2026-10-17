@@ -131,10 +131,11 @@ with st.sidebar:
                                                placeholder=t("choose_products"), key="closed")
     st.divider()
     st.subheader(":material/timer: " + t("time_saved"))
-    manual_s = st.number_input(t("manual_s"), 10, 600, 90, key="manual_s")
-    review_s = st.number_input(t("review_s"), 5, 300, 15, key="review_s")
     metrics_box = st.container()
-    st.caption(t("time_note"))
+    with st.expander(t("assumptions")):
+        manual_s = st.number_input(t("manual_s"), 10, 600, 90, key="manual_s")
+        review_s = st.number_input(t("review_s"), 5, 300, 15, key="review_s")
+        st.caption(t("time_note"))
 
 tab_reply, tab_queue, tab_dash, tab_recs, tab_setup = st.tabs(
     [":material/chat: " + t("tab_reply"), ":material/groups: " + t("tab_queue"),
@@ -282,20 +283,11 @@ with tab_reply:
             if draft.error:
                 st.warning(t("model_failed", e=draft.error))
 
+        # One section for the money: the three options when there is an offer, then the deal in one line
         deal = analytics.deal_summary(check, table, settings)
-        if deal:
-            st.markdown(t("deal_title"))
-            d = st.columns(2) + st.columns(2)
-            d[0].metric(t("order_value"), f"L {deal['revenue']:,.0f}")
-            d[1].metric(t("product_cost"), f"L {deal['cost']:,.0f}")
-            d[2].metric(t("gross_profit_m", m=f"{deal['margin']:.0%}"), f"L {deal['profit']:,.0f}")
-            d[3].metric(t("vs_list"), f"L {deal['vs_list']:,.0f}")
-            fee = deal["delivery_fee"]
-            st.caption(t("deal_caption") + (t("fee_note", zone=check.zone, fee=fee) if fee is not None
-                                            else t("no_fee")))
-
+        if deal or sc:
+            st.subheader(t("sell_or_wait") if sc else t("numbers_title"))
         if sc:
-            st.subheader(t("sell_or_wait"))
             s = st.columns(3)
             s[0].metric(t("accept_offer"), f"L {sc['accept']:,.0f}")
             s[0].caption(t("still_spoil", lbs=f"{sc['spoil_accept_lbs']:.0f}"))
@@ -313,9 +305,15 @@ with tab_reply:
             else:
                 verdict = t("v_wait_more", diff=f"{sc['wait'] - sc['accept']:,.0f}", walk=walk)
             st.markdown(verdict)
+        if deal:
+            fee = deal["delivery_fee"]
+            st.caption(t("deal_line", rev=f"{deal['revenue']:,.0f}", cost=f"{deal['cost']:,.0f}",
+                         profit=f"{deal['profit']:,.0f}", m=f"{deal['margin']:.0%}", vs=f"{deal['vs_list']:,.0f}")
+                       + " " + (t("fee_note", zone=check.zone, fee=fee) if fee is not None else t("no_fee")))
+        if sc:
             with st.expander(t("how_calc")):
                 st.markdown(t("how_calc_text"))
-                st.dataframe(ln.drop(columns=["pid", "unit_cost"]), hide_index=True)
+                st.dataframe(sc["lines"].drop(columns=["pid", "unit_cost"]), hide_index=True)
 
         if check.items:
             st.subheader(t("close_order"))
@@ -371,12 +369,12 @@ with tab_reply:
             st.caption(t("receipt_caption"))
 
     if st.session_state.log:
-        st.subheader(t("log_title"))
-        log_df = pd.DataFrame(st.session_state.log[::-1])
-        log_df["source"] = log_df["source"].map(lambda s: i18n.source(s, lang))
-        st.dataframe(log_df, hide_index=True, column_config={
-            "message": t("log_message"), "decide_tu": st.column_config.CheckboxColumn("DECIDE TÚ"),
-            "reasons": t("log_reasons"), "source": t("log_source")})
+        with st.expander(f"{t('log_title')} ({len(st.session_state.log)})"):
+            log_df = pd.DataFrame(st.session_state.log[::-1])
+            log_df["source"] = log_df["source"].map(lambda s: i18n.source(s, lang))
+            st.dataframe(log_df, hide_index=True, column_config={
+                "message": t("log_message"), "decide_tu": st.column_config.CheckboxColumn("DECIDE TÚ"),
+                "reasons": t("log_reasons"), "source": t("log_source")})
 
 QUEUE_EXAMPLE = "\n".join([
     "Ana: buenas, me deja 10 libras de camaron a 70 y me lo lleva mañana a sambo creek",
@@ -450,35 +448,8 @@ with tab_queue:
         st.success(t("reserved", n=st.session_state.queue_done))
 
 with tab_dash:
+    # Most actionable first: the lots, then today's money, then the 30-day picture
     orders = st.session_state.orders
-    st.subheader(t("session_title"))
-    o = st.columns(2) + st.columns(2)
-    o[0].metric(t("orders"), len(orders))
-    o[1].metric(t("sales"), f"L {sum(x['revenue'] for x in orders):,.0f}")
-    o[2].metric(t("rescued"), f"L {sum(x['rescued'] for x in orders):,.0f}")
-    o[3].metric(t("flagged"), sum(1 for x in st.session_state.log if x["decide_tu"]))
-    st.caption(t("session_caption"))
-
-    st.subheader(t("cava_title"))
-    sold_today = sum(x["revenue"] for x in orders)
-    parts = {"fish": f"{fish_capital:,.0f}", "ice": overhead["ice"], "fuel": overhead["fuel"]}
-    st.progress(min(sold_today / capital, 1.0),
-                text=t("cava_progress", sold=f"{sold_today:,.0f}", capital=f"{capital:,.0f}",
-                       pct=f"{sold_today / capital:.0%}"))
-    if sold_today < capital:
-        st.markdown(t("cava_missing", missing=f"{capital - sold_today:,.0f}", **parts))
-    else:
-        st.markdown(t("cava_done", **parts))
-
-    revenue = table["revenue_30d"].sum()
-    margin = table["margin_30d"].sum()
-    k = st.columns(2) + st.columns(2)  # 2x2 so values never truncate on narrow screens
-    k[0].metric(t("revenue_30d"), f"L {revenue:,.0f}")
-    k[1].metric(t("gross_margin", m=f"{margin / revenue:.0%}"), f"L {margin:,.0f}")
-    k[2].metric(t("at_risk", v=f"{table['value_at_risk'].sum():,.0f}"), f"{table['at_risk_lbs'].sum():.0f} lb")
-    k[3].metric(t("need_action"), int((table["action"] != "OK").sum()))
-    st.subheader(t("daily_rev"))
-    st.bar_chart(analytics.daily_revenue(sales).rename(t("revenue_series")), color="#0C6E7A")
     st.subheader(t("lots"))
     st.dataframe(
         table.assign(action=table["action"].map(lambda a: i18n.action(a, lang)))[
@@ -498,38 +469,46 @@ with tab_dash:
         })
     st.caption(t("dash_caption"))
 
+    st.subheader(t("session_title"))
+    sold_today = sum(x["revenue"] for x in orders)
+    parts = {"fish": f"{fish_capital:,.0f}", "ice": overhead["ice"], "fuel": overhead["fuel"]}
+    st.progress(min(sold_today / capital, 1.0),
+                text=t("cava_progress", sold=f"{sold_today:,.0f}", capital=f"{capital:,.0f}",
+                       pct=f"{sold_today / capital:.0%}"))
+    st.caption(t("cava_missing", missing=f"{capital - sold_today:,.0f}", **parts) if sold_today < capital
+               else t("cava_done", **parts))
+    o = st.columns(4)
+    o[0].metric(t("orders"), len(orders))
+    o[1].metric(t("sales"), f"L {sold_today:,.0f}")
+    o[2].metric(t("rescued"), f"L {sum(x['rescued'] for x in orders):,.0f}")
+    o[3].metric(t("flagged"), sum(1 for x in st.session_state.log if x["decide_tu"]))
+    st.caption(t("session_caption"))
+
+    st.subheader(t("kpi_title"))
+    revenue = table["revenue_30d"].sum()
+    margin = table["margin_30d"].sum()
+    k = st.columns(4)
+    k[0].metric(t("revenue_30d"), f"L {revenue:,.0f}")
+    k[1].metric(t("gross_margin", m=f"{margin / revenue:.0%}"), f"L {margin:,.0f}")
+    k[2].metric(t("at_risk", v=f"{table['value_at_risk'].sum():,.0f}"), f"{table['at_risk_lbs'].sum():.0f} lb")
+    k[3].metric(t("need_action"), int((table["action"] != "OK").sum()))
+    st.bar_chart(analytics.daily_revenue(sales).rename(t("revenue_series")), color="#0C6E7A", height=220)
+
 with tab_recs:
     st.write(t("recs_intro"))
-    st.dataframe(
-        table.assign(action=table["action"].map(lambda a: i18n.action(a, lang)))[
-            ["name", "action", "suggested_price", "reorder_lbs", "reason"]],
-        hide_index=True,
-        column_config={
-            "name": t("col_product"),
-            "action": t("col_action"),
-            "suggested_price": st.column_config.NumberColumn(t("col_price_today"), format="L %d"),
-            "reorder_lbs": st.column_config.NumberColumn(t("col_buy"), format="%d lb"),
-            "reason": st.column_config.TextColumn(t("col_why"), width="large"),
-        })
-    if st.button(t("explain_btn")):
-        with st.spinner(t("asking")):
-            st.session_state.recs = copilot.recommendations(table, lang)
-    if "recs" in st.session_state:
-        recs = st.session_state.recs
-        st.markdown(recs.text)
-        st.caption(t("source", s=i18n.source(recs.source, lang)) + (f" · {recs.seconds:.1f} s" if recs.seconds else ""))
-        if recs.error:
-            st.warning(t("rec_failed", e=recs.error))
-
-    lots = table[table["action"] == "Mark down"]
-    if not lots.empty:
-        st.subheader(t("who_title"))
-        st.caption(t("who_caption"))
-        buyers = buyers_list(FILES_VERSION)
-        for _, lot in lots.iterrows():
+    todo = table[table["action"] != "OK"]
+    fine = table[table["action"] == "OK"]
+    buyers = buyers_list(FILES_VERSION)
+    for _, lot in todo.iterrows():
+        # One block per product that needs something: the action and its rule, readable in full
+        price = f" · L {lot['suggested_price']}/lb" if lot["action"] == "Mark down" else ""
+        buy = f" · {t('col_buy')} {lot['reorder_lbs']:g} lb" if lot["reorder_lbs"] else ""
+        st.markdown(f"#### {lot['name']}: {i18n.action(lot['action'], lang)}{price}{buy}")
+        st.markdown(lot["reason"])
+        if lot["action"] == "Mark down":
             pid = lot["product_id"]
             ranked = analytics.match_buyers(lot, buyers, settings)
-            st.markdown(t("lot_line", name=lot["name"], lbs=f"{lot['at_risk_lbs']:g}", price=lot["suggested_price"]))
+            st.caption(t("who_title") + ". " + t("who_caption"))
             st.dataframe(
                 ranked.assign(type=ranked["type"].map(lambda x: i18n.buyer_type(x, lang)))[
                     ["name", "type", "zone", "typical_lbs", "last_order_days_ago", "match", "offer_lbs"]],
@@ -555,6 +534,18 @@ with tab_recs:
                            + (f" · {res.seconds:.1f} s" if res.seconds else "") + t("flash_caption"))
                 if res.error:
                     st.warning(t("flash_failed", e=res.error))
+        st.divider()
+    if not fine.empty:
+        st.caption(t("ok_line", names=", ".join(fine["name"])))
+    if st.button(t("explain_btn")):
+        with st.spinner(t("asking")):
+            st.session_state.recs = copilot.recommendations(table, lang)
+    if "recs" in st.session_state:
+        recs = st.session_state.recs
+        st.markdown(recs.text)
+        st.caption(t("source", s=i18n.source(recs.source, lang)) + (f" · {recs.seconds:.1f} s" if recs.seconds else ""))
+        if recs.error:
+            st.warning(t("rec_failed", e=recs.error))
 
 sold_now = sum(x["revenue"] for x in st.session_state.orders)
 lots_to_act = int((table["action"] != "OK").sum())
