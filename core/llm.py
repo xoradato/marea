@@ -32,7 +32,7 @@ def model_name():
     return config()["AMD_MODEL"] or "not configured"
 
 
-def chat(messages, max_tokens=400, temperature=0.4, timeout=60):
+def chat(messages, max_tokens=400, temperature=0.4, timeout=30):
     """Returns (text, seconds). Raises LLMError with a readable message on any failure."""
     cfg = config()
     if not all(cfg.values()):

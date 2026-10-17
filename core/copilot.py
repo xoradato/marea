@@ -37,6 +37,11 @@ def _source():
     return f"{llm.model_name()} on AMD Token Factory"
 
 
+def _clean(text):
+    """Strip the internal review marker and wrapping quotes a model sometimes adds to a message."""
+    return text.replace("[REVIEW]", "").strip().strip('"“”').strip()
+
+
 def _seller_facts(check, table, settings):
     rows = table.set_index("product_id")
     ids = check.product_ids or list(rows.index)
@@ -76,7 +81,7 @@ def draft_reply(message, check, table, settings):
     reply, _, english = text.partition("---EN---")
     reply = reply.strip()
     review = reply.startswith("[REVIEW]")
-    return Result(reply.removeprefix("[REVIEW]").strip(), english.strip(), review, _source(), secs)
+    return Result(_clean(reply), _clean(english), review, _source(), secs)
 
 
 def _template_reply(check, table, source, error=None):
@@ -182,7 +187,7 @@ def draft_counter(message, check, scenarios, table, settings, accept=False):
     except llm.LLMError as e:
         return _template_counter(terms, "offline template (model call failed)", error=str(e))
     reply, _, english = text.partition("---EN---")
-    return Result(reply.strip(), english.strip(), False, _source(), secs)
+    return Result(_clean(reply), _clean(english), False, _source(), secs)
 
 
 def _template_counter(terms, source, error=None):
@@ -232,8 +237,8 @@ def flash_sale_messages(lot, buyers):
     for block in text.split("###")[1:]:
         head, _, body = block.strip().partition("\n")
         bid = head.split(":")[0].strip()
-        if bid in templates and body.strip():
-            drafted[bid] = body.strip()
+        if bid in templates and _clean(body):
+            drafted[bid] = _clean(body)
     if len(drafted) < len(templates):  # keep the template for any buyer the model skipped
         return {**templates, **drafted}, Result("", source=_source() + " (some messages from template)", seconds=secs)
     return drafted, Result("", source=_source(), seconds=secs)
