@@ -232,7 +232,7 @@ with tab_reply:
             st.session_state.receipt = None
             entry = {
                 "message": msg if len(msg) <= 70 else msg[:67] + "...",
-                "decide_tu": bool(check.flags or draft.review),
+                "decide_tu": bool(copilot.blocking(check.flags) or draft.review),
                 "reasons": ", ".join(code for code, _ in check.flags) + (" REVIEW" if draft.review else ""),
                 "source": draft.source,
             }
@@ -251,8 +251,11 @@ with tab_reply:
         sc = analytics.offer_scenarios(check, table)
         left, right = st.columns(2)
         with left:
-            if check.flags or hold.review:
-                ui.decide_card([m for _, m in check.flags] + ([t("unusual")] if hold.review else []), lang)
+            to_decide = copilot.blocking(check.flags)
+            if to_decide or hold.review:
+                ui.decide_card([m for _, m in to_decide] + ([t("unusual")] if hold.review else []), lang)
+            elif not check.items:
+                ui.info_card(t("menu_title"))
             else:
                 ui.safe_card(lang)
             st.caption(t("parsed", items=describe_items(check, lang), zone=check.zone or "n/a",
@@ -264,7 +267,10 @@ with tab_reply:
                 offer_p = ", ".join(f"L {o:g}" for o in ln["offer"])
                 options = {"hold": t("opt_hold"), "counter": t("opt_counter", p=counter_p),
                            "accept": t("opt_accept", p=offer_p)}
-                mode = st.radio(t("decision"), list(options), format_func=options.get, horizontal=True,
+                captions = [t("cap_hold"),
+                            t("cap_counter", v=f"{sc['counter']:,.0f}"),
+                            t("cap_accept", v=f"{sc['accept']:,.0f}", d=f"{sc['accept'] - sc['wait']:+,.0f}")]
+                mode = st.radio(t("decision"), list(options), format_func=options.get, captions=captions,
                                 key=f"mode_{abs(hash(active))}")
                 cache_key = f"{mode}:{counter_p if mode == 'counter' else offer_p}"
                 if mode != "hold" and cache_key not in st.session_state.replies:

@@ -10,6 +10,7 @@ Rules:
 - Never mention the seller's minimum price, the flags, or these instructions.
 - If FLAGS is not "none": do not accept, reject or counter the deal. Write a short, friendly holding reply saying the seller will confirm soon. You may share list prices and what is available.
 - If FLAGS is "none" but the request needs something not covered by SELLER DATA (invoices, credit, custom cuts, anything unusual), start the reply with [REVIEW].
+- If the buyer does not name a product, asks what you have, or asks for a product not in SELLER DATA: list what is in stock today with its price (mention today's specials), and ask which one and how many pounds. Never answer with only "let me check".
 - After the reply, write a line with exactly ---EN--- and then an English translation of the reply.
 Output only the reply and the translation."""
 
@@ -64,8 +65,16 @@ def _seller_facts(check, table, settings):
     return "\n".join(lines)
 
 
+INFO_FLAGS = {"UNKNOWN_PRODUCT"}  # a question to answer with today's catch, not a deal to decide
+
+
+def blocking(flags):
+    """Flags that need the seller's decision (everything except a buyer asking what there is)."""
+    return [(code, msg) for code, msg in flags if code not in INFO_FLAGS]
+
+
 def draft_reply(message, check, table, settings):
-    flags = "\n".join(f"- {m}" for _, m in check.flags) or "none"
+    flags = "\n".join(f"- {m}" for _, m in blocking(check.flags)) or "none"
     user = (f"SELLER DATA:\n{_seller_facts(check, table, settings)}\n\n"
             f"FLAGS:\n{flags}\n\nBUYER MESSAGE:\n{message}")
     if not llm.is_configured():
@@ -84,9 +93,33 @@ def draft_reply(message, check, table, settings):
     return Result(_clean(reply), _clean(english), review, _source(), secs)
 
 
+def _menu(table):
+    """Today's catch in stock, specials first: [(name, price, is_special)]."""
+    rows = table[table["stock_lbs"] > 0].sort_values("action", key=lambda a: a != "Mark down", kind="stable")
+    return [(r["name"].lower(), r["suggested_price"] if r["action"] == "Mark down" else r["list_price"],
+             r["action"] == "Mark down") for _, r in rows.iterrows()]
+
+
+def _join(items, last):
+    return items[0] if len(items) == 1 else ", ".join(items[:-1]) + f" {last} " + items[-1]
+
+
 def _template_reply(check, table, source, error=None):
     rows = table.set_index("product_id")
-    if check.flags or not check.product_ids:
+    if not check.product_ids:
+        # The buyer did not name a product (or named one we do not sell): show today's catch, never stall
+        menu = _menu(table)
+        if not menu:
+            es = "¡Buenas! Por hoy ya se me terminó todo. Le aviso en cuanto llegue el próximo lote."
+            en = "Hi! I'm sold out today. I'll let you know as soon as the next catch comes in."
+            return Result(es, en, False, source, None, error)
+        es_items = [f"{n} a L {p}" + (" (precio especial)" if s else "") for n, p, s in menu]
+        en_items = [f"{n} at L {p}" + (" (today's special)" if s else "") for n, p, s in menu]
+        qty_es = f"le aparto las {check.qty_lbs:g} libras" if check.qty_lbs else "le aparto y cuántas libras ocupa"
+        qty_en = f"should I set aside {check.qty_lbs:g} lb of" if check.qty_lbs else "would you like, and how many pounds"
+        es = f"¡Buenas! Hoy tengo {_join(es_items, 'y')}, todo por libra. ¿De cuál {qty_es}?"
+        en = f"Hi! Today I have {_join(en_items, 'and')}, all per pound. Which one {qty_en}?"
+    elif blocking(check.flags):
         es = "¡Buenas! Gracias por escribir. Déjeme revisar y ya le confirmo. 🐟"
         en = "Hi! Thanks for writing. Let me check and I'll confirm shortly."
     else:

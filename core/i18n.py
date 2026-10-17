@@ -96,6 +96,13 @@ TEXT = {
     "for_everything": ("L {offer} for everything", "L {offer} por todo"),
     "no_product": ("no product", "sin producto"),
     "decision": ("Your decision", "Su decisión"),
+    "cap_hold": ("Ask them to wait a moment while you decide.", "Pedirle un momento mientras usted decide."),
+    "cap_counter": ("Brings L {v} from these lots if they take it.", "Deja L {v} de estos lotes si la acepta."),
+    "cap_accept": ("Brings L {v} from these lots ({d} vs. waiting).", "Deja L {v} de estos lotes ({d} vs. esperar)."),
+    "menu_title": ("**No product from your catalog in this message.** The reply lists today's catch and prices "
+                   "so the buyer can choose.",
+                   "**El mensaje no menciona un producto de su catálogo.** La respuesta muestra lo que hay hoy y sus "
+                   "precios para que elija."),
     "opt_hold": ("Hold: ask to wait", "Esperar: pedir un momento"),
     "opt_counter": ("Counter at {p}/lb", "Contraofertar a {p}/lb"),
     "opt_accept": ("Accept {p}/lb", "Aceptar {p}/lb"),

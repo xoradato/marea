@@ -54,14 +54,14 @@ CSS = f"""
   background-repeat: no-repeat, no-repeat, no-repeat;
   background-position: right 4% center, right 9% center, center;
   background-size: auto 78%, auto 92%, 100% 100%;
-  border-radius: 16px; padding: 2px 24px 18px; gap: 0.35rem;
+  border-radius: 16px; padding: 8px 28px 24px; gap: 0.35rem;
 }}
 .st-key-hero h1 {{ color: #FFFFFF; font-weight: 800; font-size: 1.9rem; letter-spacing: -0.02em; padding-bottom: 0.2rem; }}
 .st-key-hero p {{ color: #D5EAE7; max-width: 60ch; }}
-.st-key-hero p.marea-tagline {{ margin: 0 0 12px; }}
-.marea-pills {{ display: flex; flex-wrap: wrap; gap: 8px; max-width: 70%; }}
+.st-key-hero p.marea-tagline {{ margin: 0 0 18px; }}
+.marea-pills {{ display: flex; flex-wrap: wrap; gap: 10px 12px; max-width: 70%; }}
 .marea-pill {{
-  display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px; border-radius: 999px;
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px; border-radius: 999px;
   background: rgba(4, 22, 36, 0.45); color: #F4FBFA; font-size: 0.85rem; font-variant-numeric: tabular-nums;
 }}
 .marea-dot {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }}
@@ -70,10 +70,21 @@ CSS = f"""
 @media (max-width: 760px) {{
   .st-key-hero {{ background-image: url("{_uri(WAVES)}"); background-size: 100% 100%; }}
 }}
-.st-key-decide {{ background: rgba(228, 87, 46, 0.14); border-radius: 12px; padding: 14px 18px; }}
+.st-key-decide, .st-key-safe, .st-key-info {{ border-radius: 12px; padding: 20px 24px; gap: 0.5rem; }}
+.st-key-decide {{ background: rgba(228, 87, 46, 0.14); }}
 .st-key-decide [data-testid="stIconMaterial"] {{ color: #D9583A; }}
-.st-key-safe {{ background: rgba(27, 153, 139, 0.14); border-radius: 12px; padding: 14px 18px; }}
+.st-key-decide li {{ margin-bottom: 6px; }}
+.st-key-safe {{ background: rgba(27, 153, 139, 0.14); }}
 .st-key-safe [data-testid="stIconMaterial"] {{ color: #17897C; }}
+.st-key-info {{ background: rgba(61, 90, 128, 0.14); }}
+.st-key-info [data-testid="stIconMaterial"] {{ color: #3D7BB0; }}
+/* Spacing rhythm (8 px grid): 16 between related items, 24-32 between groups */
+.st-key-hero {{ margin-bottom: 8px; }}
+[data-baseweb="tab-list"] {{ gap: 28px; }}
+[data-baseweb="tab-panel"] {{ padding-top: 20px; }}
+[data-testid="stMain"] [data-testid="stVerticalBlock"] {{ gap: 1.1rem; }}
+[data-testid="stMain"] [data-testid="stHorizontalBlock"] {{ gap: 2rem; }}
+[data-testid="stMain"] [data-testid="stRadio"] [role="radiogroup"] {{ gap: 10px; }}
 [data-testid="stMain"] [data-testid="stMetric"] {{
   background: rgba(128, 160, 170, 0.12); border-radius: 12px; padding: 12px 16px;
 }}
@@ -111,6 +122,11 @@ def decide_card(reasons, lang="en"):
     with st.container(key="decide"):
         st.markdown(":material/front_hand: " + t("decide_title", lang))
         st.markdown("\n".join(f"- {r}" for r in reasons))
+
+
+def info_card(text):
+    with st.container(key="info"):
+        st.markdown(":material/storefront: " + text)
 
 
 def safe_card(lang="en"):
