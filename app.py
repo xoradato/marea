@@ -465,7 +465,8 @@ with tab_queue:
         def notes(ln):
             if ln["pid"] is None:
                 return t("n_noproduct")
-            out = [t("n_out")] if ln["unavailable"] else []
+            out = [t("n_all")] if ln["takes_all"] else []
+            out += [t("n_out")] if ln["unavailable"] else []
             out += [t("n_zone")] if ln["outside_zone"] else []
             out += [t("n_credit")] if ln["credit"] else []
             out += [t("n_today")] if ln["needs_today"] else []
@@ -474,7 +475,8 @@ with tab_queue:
 
         view = rk.assign(
             rank=range(1, len(rk) + 1),
-            asks=[f"{ln['lbs']:g} lb @ L {ln['price']:g}" if ln["pid"] else "—" for _, ln in rk.iterrows()],
+            asks=[(t("q_all", lbs=f"{ln['lbs']:g}") if ln["takes_all"] else f"{ln['lbs']:g} lb")
+                  + f" @ L {ln['price']:g}" if ln["pid"] else "—" for _, ln in rk.iterrows()],
             gets=rk["gets"], notes=[notes(ln) for _, ln in rk.iterrows()],
             product=rk["product"].fillna("—"))
         st.dataframe(view[["rank", "buyer", "product", "asks", "gets", "cash_today", "notes"]], hide_index=True,
@@ -488,8 +490,9 @@ with tab_queue:
         st.caption(t("queue_rule"))
 
         st.subheader(t("replies_title"))
+        others = buyer_queue.other_catch(st.session_state.queue, table, settings)
         for _, ln in rk.drop_duplicates("buyer").iterrows():
-            text = buyer_queue.reply(rk[rk["buyer"] == ln["buyer"]].iloc[0])
+            text = buyer_queue.reply(rk[rk["buyer"] == ln["buyer"]].iloc[0], others)
             st.markdown(f"**{ln['buyer']}**")
             st.code(text, language=None, wrap_lines=True)
             st.link_button(t("open_whatsapp"), wa_link(text), icon=":material/send:")

@@ -36,6 +36,16 @@ def main():
     assert buyer_queue.split_messages("a las 4:30 paso por 5 libras de pargo") == [
         ("#1", "a las 4:30 paso por 5 libras de pargo")]                       # a time is not a name
     assert buyer_queue.rank("   \n  ", table, settings) is None
+
+    # A buyer who wants "everything you have" is a full-lot order at list price, not a lost line
+    big = QUEUE + "\nPalma Real: Quiero todo su producto disponible lo mas pronto posible"
+    q2 = buyer_queue.rank(big, table, settings)
+    top = q2["ranked"].iloc[0]
+    assert (top["buyer"], top["gets"], top["price"], bool(top["takes_all"])) == ("Palma Real", 35, 95, True), top
+    assert q2["cash_marea"] == 35 * 95 > q["cash_marea"], q2["cash_marea"]
+    others = buyer_queue.other_catch(big, table, settings)
+    text = buyer_queue.reply(top, others)
+    assert "se las aparto todas" in text and "También tengo hoy róbalo" in text, text
     print(f"order {order}\ncash today: Marea L {q['cash_marea']:,.0f} vs arrival order L {q['cash_fifo']:,.0f}")
     print("1/1 passed")
 

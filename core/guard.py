@@ -167,7 +167,9 @@ def _when(t):
     return None
 
 
-EVERYTHING_RE = re.compile(r"\b(?:de todo|todo lo que|de cada|everything|of each|of all)\b")
+EVERYTHING_RE = re.compile(r"\b(?:de todo|todo lo que|de cada|todo (?:su|el|lo) (?:producto|pescado|marisco|disponible)"
+                           r"|todo lo disponible|everything|of each|of all|all you have)\b")
+SOON_RE = re.compile(r"\b(?:pronto|ya mismo|ahorita|hoy|urge|asap|now|today)\b")
 
 
 def asks_for_everything(text):
