@@ -14,7 +14,7 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 2. **Dashboard.** Revenue, margin, stock at risk of spoiling (in pounds and lempiras at cost), and days of cover, computed with pandas. A time slider simulates the next 36 hours: stock sells at the 14-day average and lots age, so you can see when markdowns start and when a lot must be discarded.
 3. **What to do today.** Fixed rules choose the action (mark down, restock, discard). The model only explains the numbers. For each lot marked down, regular buyers are ranked with code and the model drafts a flash-sale WhatsApp message for each one. Nothing is sent automatically.
 
-When a buyer makes an offer, Marea compares three options in lempiras: accept, counter-offer, or reject and wait. The seller picks one, edits the draft and opens it in WhatsApp with one click. Confirming the order records preparation (whole, cleaned, filleted; weighed whole) and payment (cash on delivery or transfer before dispatch), drops the stock everywhere in the app and generates a WhatsApp-ready receipt. The dashboard tracks the day's break-even (librar la cava): fish on ice at cost plus ice and fuel, against what has been sold.
+When a buyer makes an offer, Marea compares three options in lempiras: accept, counter-offer, or reject and wait. The seller picks one, edits the draft and opens it in WhatsApp with one click. Confirming the order records preparation (whole, cleaned, filleted; weighed whole) and payment (cash on delivery or transfer before dispatch), drops the stock everywhere in the app and generates a WhatsApp-ready receipt. When several buyers ask for the same stock at once (common on Marketplace), the **Several buyers** tab ranks them with code and splits the pounds: buyers who pay today and can be served as asked first, then deliveries that only work today, then credit; within each group, highest price per pound first. It shows the cash this brings today against answering in arrival order (in the demo: L 3,110 vs. L 1,590), drafts a reply for each buyer and can reserve all the pounds at once. The dashboard tracks the day's break-even (librar la cava): fish on ice at cost plus ice and fuel, against what has been sold.
 
 The interface switches between English and Spanish (sidebar). Messages to buyers, receipts and flash sales are always in Spanish.
 
@@ -29,7 +29,7 @@ The interface switches between English and Spanish (sidebar). Messages to buyers
 - Sell now or wait: other buyers take the 14-day average until the lot's freshness runs out, the rest spoils. Accept = offer × pounds + list price × what others still buy; wait = list price × what others buy. Fish on ice is a sunk cost, so options are compared on money in. Walk-away price = lowest price per pound at which selling now still beats waiting. Counter-offer = halfway between offer and list price, never below the walk-away price.
 - Buyer match score (0–100): buys this species 50, usual order size against pounds at risk 30, delivery zone 10, ordered in the last week 10.
 
-`python tests/test_offer.py` checks these rules on the synthetic data.
+`python tests/test_offer.py` and `python tests/test_queue.py` check these rules on the synthetic data.
 
 ## When the seller sees DECIDE TÚ
 

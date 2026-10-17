@@ -6,11 +6,11 @@ from urllib.parse import quote
 import pandas as pd
 import streamlit as st
 
-from core import analytics, benchmark, copilot, guard, i18n, llm, ui
+from core import analytics, benchmark, buyer_queue, copilot, guard, i18n, llm, ui
 
 # Streamlit Cloud can keep an old copy of a changed module after a redeploy. Reload any module whose
 # file changed since it was loaded (dependencies first, so later modules see the new versions).
-for _module in (i18n, llm, guard, analytics, copilot, benchmark, ui):
+for _module in (i18n, llm, guard, analytics, copilot, benchmark, buyer_queue, ui):
     _mtime = os.path.getmtime(_module.__file__)
     if getattr(_module, "_loaded_mtime", None) != _mtime:
         importlib.reload(_module)
@@ -135,9 +135,10 @@ with st.sidebar:
     metrics_box = st.container()
     st.caption(t("time_note"))
 
-tab_reply, tab_dash, tab_recs, tab_setup = st.tabs(
-    [":material/chat: " + t("tab_reply"), ":material/monitoring: " + t("tab_dash"),
-     ":material/checklist: " + t("tab_recs"), ":material/inventory_2: " + t("tab_catalog")])
+tab_reply, tab_queue, tab_dash, tab_recs, tab_setup = st.tabs(
+    [":material/chat: " + t("tab_reply"), ":material/groups: " + t("tab_queue"),
+     ":material/monitoring: " + t("tab_dash"), ":material/checklist: " + t("tab_recs"),
+     ":material/inventory_2: " + t("tab_catalog")])
 
 # Rendered last in the tab bar, but runs first so every tab uses the edited values
 with tab_setup:
@@ -187,6 +188,29 @@ sold = inventory["product_id"].map(st.session_state.sold).fillna(0)
 inventory = inventory.assign(stock_lbs=(inventory["product_id"].map(e["stock_lbs"]) - sold).clip(lower=0))
 table = analytics.product_table(catalog, sales, inventory, as_of, hours_ahead, lang)
 rows = table.set_index("product_id")
+
+
+def record_order(lines, zone, when, prep="whole", payment="cash"):
+    """lines: [(pid, lbs, price per lb)]. Takes the pounds off the stock and adds the order to the session."""
+    fee_per_lb = settings["prep_fees"][prep]
+    prep_total = sum(lbs for _, lbs, _ in lines) * fee_per_lb
+    for pid, lbs, _ in lines:
+        st.session_state.sold[pid] = st.session_state.sold.get(pid, 0) + lbs
+    order = {
+        "n": len(st.session_state.orders) + 1,
+        "time": as_of + pd.Timedelta(hours=hours_ahead),
+        "lines": [{"product": names[pid], "lbs": lbs, "price": price} for pid, lbs, price in lines],
+        "prep": prep, "prep_fee": fee_per_lb, "prep_total": prep_total, "payment": payment,
+        "revenue": sum(lbs * price for _, lbs, price in lines) + prep_total,
+        "cost": sum(lbs * rows.loc[pid, "unit_cost"] for pid, lbs, _ in lines),
+        # pounds the forecast said would spoil, sold instead
+        "rescued": sum(min(lbs, rows.loc[pid, "at_risk_lbs"]) * price for pid, lbs, price in lines),
+        "zone": zone,
+        "fee": settings["delivery_zones"].get(zone) if zone else None,
+        "when": when,
+    }
+    st.session_state.orders.append(order)
+    return order
 
 with tab_reply:
     pick = st.selectbox(t("example_label"), EXAMPLES)
@@ -330,29 +354,10 @@ with tab_reply:
                 elif errors:
                     st.error(t("err_stock") + " ".join(errors))
                 else:
-                    rescued = 0.0
-                    for _, r in cart.iterrows():
-                        pid = ids[r["product"]]
-                        st.session_state.sold[pid] = st.session_state.sold.get(pid, 0) + float(r["lbs"])
-                        # pounds the forecast said would spoil, sold instead
-                        rescued += min(float(r["lbs"]), rows.loc[pid, "at_risk_lbs"]) * float(r["price_per_lb"])
                     today = any(code == "FRESHNESS" for code, _ in check.flags)
-                    prep_total = float(cart["lbs"].sum() * fees[prep])
-                    order = {
-                        "n": len(st.session_state.orders) + 1,
-                        "time": as_of + pd.Timedelta(hours=hours_ahead),
-                        "lines": [{"product": r["product"], "lbs": float(r["lbs"]), "price": float(r["price_per_lb"])}
-                                  for _, r in cart.iterrows()],
-                        "prep": prep, "prep_fee": fees[prep], "prep_total": prep_total, "payment": payment,
-                        "revenue": float((cart["lbs"] * cart["price_per_lb"]).sum()) + prep_total,
-                        "cost": float(sum(r["lbs"] * rows.loc[ids[r["product"]], "unit_cost"]
-                                          for _, r in cart.iterrows())),
-                        "rescued": rescued,
-                        "zone": check.zone,
-                        "fee": settings["delivery_zones"].get(check.zone) if check.zone else None,
-                        "when": WHEN_ES.get(0 if today else check.when_h),
-                    }
-                    st.session_state.orders.append(order)
+                    order = record_order([(ids[r["product"]], float(r["lbs"]), float(r["price_per_lb"]))
+                                          for _, r in cart.iterrows()],
+                                         check.zone, WHEN_ES.get(0 if today else check.when_h), prep, payment)
                     st.session_state.receipt = receipt_text(order, settings["business_name"])
                     st.rerun()
         if st.session_state.get("receipt"):
@@ -368,6 +373,77 @@ with tab_reply:
         st.dataframe(log_df, hide_index=True, column_config={
             "message": t("log_message"), "decide_tu": st.column_config.CheckboxColumn("DECIDE TÚ"),
             "reasons": t("log_reasons"), "source": t("log_source")})
+
+QUEUE_EXAMPLE = "\n".join([
+    "Ana: buenas, me deja 10 libras de camaron a 70 y me lo lleva mañana a sambo creek",
+    "Comedor Doña Lety: ocupo 15 lbs de camaron a 82 para hoy al mediodia, se las pago el viernes",
+    "Carlos: quiero 4 libras de camaron, paso hoy mismo y le pago en efectivo",
+    "Restaurante Brisa Norte: 12 libras de camaron a 85 para hoy en zona viva",
+    "Hotelito Las Palmas: ocupo 20 lbs de camaron a 90 para pasado mañana en Tela",
+])
+
+with tab_queue:
+    st.write(t("queue_intro"))
+    queue_text = st.text_area(t("queue_label"), value=QUEUE_EXAMPLE, height=150)
+    if st.button(t("queue_btn"), type="primary"):
+        st.session_state.queue = queue_text if queue_text.strip() else None
+        st.session_state.queue_done = None
+        if not queue_text.strip():
+            st.info(t("queue_empty"))
+    if st.session_state.get("queue"):
+        # Ranked again on every render, so it follows the clock, stock and orders already confirmed
+        q = buyer_queue.rank(st.session_state.queue, table, settings, lang)
+        rk = q["ranked"]
+        c = st.columns(2)
+        c[0].metric(t("cash_marea"), f"L {q['cash_marea']:,.0f}")
+        c[1].metric(t("cash_fifo"), f"L {q['cash_fifo']:,.0f}")
+        diff = q["cash_marea"] - q["cash_fifo"]
+        st.markdown(t("cash_diff", diff=f"{diff:,.0f}") if diff > 0 else t("cash_same"))
+
+        def notes(ln):
+            if ln["pid"] is None:
+                return t("n_noproduct")
+            out = [t("n_out")] if ln["unavailable"] else []
+            out += [t("n_zone")] if ln["outside_zone"] else []
+            out += [t("n_credit")] if ln["credit"] else []
+            out += [t("n_today")] if ln["needs_today"] else []
+            out += [t("n_noqty")] if ln["lbs"] <= 0 else []
+            return ", ".join(out) or t("n_ok")
+
+        view = rk.assign(
+            rank=range(1, len(rk) + 1),
+            asks=[f"{ln['lbs']:g} lb @ L {ln['price']:g}" if ln["pid"] else "—" for _, ln in rk.iterrows()],
+            gets=rk["gets"], notes=[notes(ln) for _, ln in rk.iterrows()],
+            product=rk["product"].fillna("—"))
+        st.dataframe(view[["rank", "buyer", "product", "asks", "gets", "cash_today", "notes"]], hide_index=True,
+                     column_config={
+                         "rank": t("q_rank"), "buyer": t("col_buyer"), "product": t("col_product"),
+                         "asks": t("q_asks"),
+                         "gets": st.column_config.NumberColumn(t("q_gets"), format="%.1f lb"),
+                         "cash_today": st.column_config.NumberColumn(t("q_cash"), format="L %d"),
+                         "notes": st.column_config.TextColumn(t("q_notes"), width="medium")})
+        st.caption(t("left_after", left=", ".join(f"{names[p]} {lbs:g} lb" for p, lbs in q["left"].items())))
+        st.caption(t("queue_rule"))
+
+        st.subheader(t("replies_title"))
+        for _, ln in rk.drop_duplicates("buyer").iterrows():
+            text = buyer_queue.reply(rk[rk["buyer"] == ln["buyer"]].iloc[0])
+            st.markdown(f"**{ln['buyer']}**")
+            st.code(text, language=None, wrap_lines=True)
+            st.link_button(t("open_whatsapp"), wa_link(text), icon=":material/send:")
+
+        served = rk[(rk["gets"] > 0) & (rk["tier"] < 3)]
+        if not served.empty and st.button(t("reserve_btn")):
+            for buyer, grp in served.groupby("buyer", sort=False):
+                first = grp.iloc[0]
+                when = WHEN_ES.get(0 if first["needs_today"] else first["when_h"])
+                record_order([(r["pid"], float(r["gets"]), float(r["price"])) for _, r in grp.iterrows()],
+                             first["zone"], when, payment="cash")
+            st.session_state.queue_done = served["buyer"].nunique()
+            st.session_state.queue = None
+            st.rerun()
+    if st.session_state.get("queue_done"):
+        st.success(t("reserved", n=st.session_state.queue_done))
 
 with tab_dash:
     orders = st.session_state.orders

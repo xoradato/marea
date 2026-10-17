@@ -160,6 +160,48 @@ TEXT = {
     "log_message": ("Message", "Mensaje"),
     "log_reasons": ("Reasons", "Motivos"),
     "log_source": ("Source", "Fuente"),
+    # Competing buyers
+    "tab_queue": ("Several buyers", "Varios compradores"),
+    "queue_intro": ("Several buyers asking for the same stock at once? Paste their messages, one per line. "
+                    "\"Name: message\" keeps each buyer's name.",
+                    "¿Varios compradores piden el mismo producto a la vez? Pegue sus mensajes, uno por línea. "
+                    "\"Nombre: mensaje\" conserva el nombre de cada uno."),
+    "queue_label": ("Buyer messages (synthetic example)", "Mensajes de compradores (ejemplo sintético)"),
+    "queue_btn": ("Who do I sell to first?", "¿A quién le vendo primero?"),
+    "queue_empty": ("Paste at least one buyer message.", "Pegue al menos un mensaje."),
+    "cash_marea": ("Cash today, in Marea's order", "Efectivo hoy, en el orden de Marea"),
+    "cash_fifo": ("Cash today, in arrival order", "Efectivo hoy, por orden de llegada"),
+    "cash_diff": ("Serving in this order brings **L {diff} more** today than answering in arrival order.",
+                  "Atender en este orden deja **L {diff} más** hoy que contestar por orden de llegada."),
+    "cash_same": ("Here the arrival order already gives the same cash today.",
+                  "Aquí el orden de llegada ya deja el mismo efectivo hoy."),
+    "q_rank": ("Order", "Orden"),
+    "q_asks": ("Asks", "Pide"),
+    "q_gets": ("Gets", "Recibe"),
+    "q_cash": ("Cash today", "Efectivo hoy"),
+    "q_notes": ("Notes", "Notas"),
+    "n_ok": ("pays today", "paga hoy"),
+    "n_today": ("only if delivered today", "solo si se entrega hoy"),
+    "n_credit": ("wants credit", "pide crédito"),
+    "n_zone": ("outside your zones", "fuera de sus zonas"),
+    "n_out": ("not available", "no disponible"),
+    "n_noqty": ("no pounds given", "no dijo cuántas libras"),
+    "n_noproduct": ("no product recognized", "sin producto reconocido"),
+    "left_after": ("Left on ice after these orders: {left}.", "Queda en hielo después de estos pedidos: {left}."),
+    "queue_rule": ("Order of service, decided by code: buyers who pay today and can be served as asked; then "
+                   "those who want delivery after the lot loses freshness (only if they take it today); then "
+                   "credit. Outside your zones or out of stock are not served. Within each group: highest price "
+                   "per pound first, then the bigger order. Serving the highest price first gives the most money "
+                   "for the pounds you have.",
+                   "Orden de atención, decidido con código: primero quien paga hoy y se le puede entregar como "
+                   "pide; luego quien pide entrega cuando el lote ya no está fresco (solo si lo recibe hoy); luego "
+                   "quien pide crédito. Fuera de zona o sin stock no se atiende. Dentro de cada grupo: mejor precio "
+                   "por libra primero y luego el pedido más grande. Atender primero al mejor precio es lo que más "
+                   "dinero deja con las libras que tiene."),
+    "replies_title": ("Replies, one per buyer", "Respuestas, una por comprador"),
+    "reserve_btn": ("Reserve these pounds and update stock", "Apartar estas libras y actualizar stock"),
+    "reserved": ("{n} orders reserved. Stock, dashboard and today's actions are updated.",
+                 "{n} pedidos apartados. El stock, el panel y las acciones de hoy ya están actualizados."),
     # Dashboard
     "session_title": ("This session with Marea", "Esta sesión con Marea"),
     "orders": ("Orders confirmed", "Pedidos confirmados"),
