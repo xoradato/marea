@@ -6,7 +6,9 @@ no eyebrow labels, status always carries text, WCAG AA contrast on every text/ba
 Custom colors are translucent tints, so the same CSS works in the light and the dark theme; the header
 keeps its own deep-sea colors in both.
 """
+import base64
 from html import escape
+from pathlib import Path
 from urllib.parse import quote
 
 import streamlit as st
@@ -22,31 +24,25 @@ WAVES = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 260' preser
 <path d='M0,168 C320,132 610,214 930,170 S1310,140 1440,176' fill='none' stroke='#8FD3C9' stroke-opacity='.14' stroke-width='1.2'/>
 </svg>"""
 
-# Minimal line-art sea turtle swimming up-left, with a trail of bubbles. Decorative only.
-TURTLE = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
+# A trail of bubbles to the left of the turtle. Decorative only.
+BUBBLES = """<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 320 200'>
 <g fill='#8FD3C9' fill-opacity='.35'>
 <circle cx='96' cy='44' r='4'/><circle cx='118' cy='24' r='2.6'/><circle cx='74' cy='70' r='3'/>
 <circle cx='132' cy='52' r='1.8'/><circle cx='60' cy='36' r='2.2'/><circle cx='104' cy='88' r='1.6'/>
 <circle cx='40' cy='60' r='1.4'/><circle cx='146' cy='14' r='1.6'/>
 </g>
-<g transform='translate(118 6) rotate(-28 100 95)' fill='none' stroke='#CDEFE9' stroke-width='2.4'
-   stroke-linejoin='round' stroke-linecap='round'>
-<path d='M66 66 C40 50 22 60 18 74 C34 74 52 76 68 84 Z' fill='#8FD3C9' fill-opacity='.14'/>
-<path d='M134 66 C160 50 178 60 182 74 C166 74 148 76 132 84 Z' fill='#8FD3C9' fill-opacity='.14'/>
-<path d='M72 124 C58 132 52 144 56 152 C66 148 76 140 82 130 Z' fill='#8FD3C9' fill-opacity='.14'/>
-<path d='M128 124 C142 132 148 144 144 152 C134 148 124 140 118 130 Z' fill='#8FD3C9' fill-opacity='.14'/>
-<path d='M95 139 L100 152 L105 139'/>
-<ellipse cx='100' cy='28' rx='13' ry='16' fill='#0B3C5D'/>
-<circle cx='94.5' cy='23' r='1.8' fill='#CDEFE9' stroke='none'/>
-<ellipse cx='100' cy='90' rx='40' ry='50' fill='#8FD3C9' fill-opacity='.18'/>
-<path d='M100 70 L114 80 L114 100 L100 110 L86 100 L86 80 Z' stroke-opacity='.8'/>
-<path d='M100 70 V41 M114 80 L136 69 M114 100 L136 111 M100 110 V139 M86 100 L64 111 M86 80 L64 69' stroke-opacity='.6'/>
-</g>
 </svg>"""
+
+# Sea turtle silhouette from iconsdb.com (CC0 1.0), alpha faded to 45%. Hosted in the repo, not hotlinked.
+TURTLE_PNG = Path(__file__).resolve().parent.parent / "assets" / "turtle-faded.png"
 
 
 def _uri(svg):
     return "data:image/svg+xml," + quote(" ".join(svg.split()))
+
+
+def _png_uri(path):
+    return "data:image/png;base64," + base64.b64encode(path.read_bytes()).decode()
 
 
 CSS = f"""
@@ -54,10 +50,10 @@ CSS = f"""
 ::selection {{ background: rgba(79, 184, 194, 0.35); }}
 .st-key-hero {{
   background-color: #0B3C5D;
-  background-image: url("{_uri(TURTLE)}"), url("{_uri(WAVES)}");
-  background-repeat: no-repeat, no-repeat;
-  background-position: right 2% center, center;
-  background-size: auto 92%, 100% 100%;
+  background-image: url("{_png_uri(TURTLE_PNG)}"), url("{_uri(BUBBLES)}"), url("{_uri(WAVES)}");
+  background-repeat: no-repeat, no-repeat, no-repeat;
+  background-position: right 4% center, right 9% center, center;
+  background-size: auto 78%, auto 92%, 100% 100%;
   border-radius: 16px; padding: 2px 24px 18px; gap: 0.35rem;
 }}
 .st-key-hero h1 {{ color: #FFFFFF; font-weight: 800; font-size: 1.9rem; letter-spacing: -0.02em; padding-bottom: 0.2rem; }}

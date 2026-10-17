@@ -56,6 +56,10 @@ streamlit run app.py
 
 Without an API key the app runs with offline templates so the rules and dashboard can still be tested.
 
+## Credits
+
+Sea turtle icon in the header: [iconsDB.com](https://www.iconsdb.com/white-icons/turtle-icon.html), CC0 1.0 (public domain), faded and hosted in this repo.
+
 ## License
 
 MIT
