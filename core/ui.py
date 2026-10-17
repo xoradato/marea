@@ -83,7 +83,6 @@ CSS = f"""
 [data-baseweb="tab-list"] {{ gap: 28px; }}
 [data-baseweb="tab-panel"] {{ padding-top: 20px; }}
 [data-testid="stMain"] [data-testid="stVerticalBlock"] {{ gap: 1.1rem; }}
-[data-testid="stMain"] [data-testid="stHorizontalBlock"] {{ gap: 2rem; }}
 [data-testid="stMain"] [data-testid="stRadio"] [role="radiogroup"] {{ gap: 10px; }}
 [data-testid="stMain"] [data-testid="stMetric"] {{
   background: rgba(128, 160, 170, 0.12); border-radius: 12px; padding: 12px 16px;

@@ -249,7 +249,7 @@ with tab_reply:
         check = guard.check_message(active, table, settings, lang)
         hold = st.session_state.replies["hold"]
         sc = analytics.offer_scenarios(check, table)
-        left, right = st.columns(2)
+        left, right = st.columns(2, gap="large")
         with left:
             to_decide = copilot.blocking(check.flags)
             if to_decide or hold.review:
