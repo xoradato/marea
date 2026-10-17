@@ -1,0 +1,9 @@
+.env
+.git
+.streamlit/secrets.toml
+__pycache__/
+.venv/
+.claude/
+.frontend-slides/
+slides/
+assets/readme/

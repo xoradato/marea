@@ -34,6 +34,9 @@ EXAMPLES = [
     "Necesito 40 libras de róbalo, ¿me lo puede llevar a San Pedro Sula el sábado? ¿Me da factura?",
     "vecino aparteme tres libras de camaron para hoy y se las pago el viernes q me caiga la quincena",
     "buenas ocupo 8 libras de camaron, 6 de jaiba y cuatro de robalo, le doy 1100 lps por todo puesto mañana en sambo creek",
+    # The rules find no catalog product in these two: Gemma on AMD reads them and code checks the result
+    "hi! could I get 5 pounds of red snapper at 75 a pound, delivered tomorrow to Sambo Creek?",
+    "kmaron a 75 la lb, me manda 10 a tela mañana?",
 ]
 EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs", "shelf_life_h"]
 WHEN_ES = {0: "hoy", 24: "mañana", 48: "pasado mañana"}
@@ -55,12 +58,15 @@ def buyers_list(version):
     return analytics.load_buyers()
 
 
+def base_table(version):
+    """Benchmarks are scored on the shipped synthetic data, not on the seller's edits or the simulated clock."""
+    catalog, sales, inventory, settings = load(version)
+    return analytics.product_table(catalog, sales, inventory, pd.Timestamp(settings["as_of"])), settings
+
+
 @st.cache_data
 def parser_benchmark(version):
-    """Scored on the shipped synthetic data, not on the seller's edits or the simulated clock."""
-    catalog, sales, inventory, settings = load(version)
-    base = analytics.product_table(catalog, sales, inventory, pd.Timestamp(settings["as_of"]))
-    return pd.DataFrame(benchmark.run(base, settings))
+    return pd.DataFrame(benchmark.run(*base_table(version)))
 
 
 PREP_ES = {"cleaned": "Limpieza y escamado", "fillet": "Fileteado"}
@@ -106,7 +112,7 @@ catalog, sales, inventory, settings = load(FILES_VERSION)
 as_of = pd.Timestamp(settings["as_of"])
 names = dict(zip(catalog["product_id"], catalog["name"]))
 
-for name, empty in (("log", []), ("sold", {}), ("orders", []), ("flash", {})):
+for name, empty in (("log", []), ("sold", {}), ("orders", []), ("flash", {}), ("model_reads", {})):
     if name not in st.session_state:
         st.session_state[name] = empty
 
@@ -182,6 +188,22 @@ with tab_setup:
             st.markdown(f"- **{t('bench_fails')}:** *{r['message']}*  \n  {r['problems']}")
         st.dataframe(bench, hide_index=True)
         st.caption(t("bench_caption"))
+    with st.expander(t("model_bench_expander")):
+        st.caption(t("model_bench_caption"))
+        if not llm.is_configured():
+            st.info(t("model_off"))
+        elif st.button(t("model_bench_btn"), icon=":material/memory:"):
+            with st.spinner(t("reading")):
+                st.session_state.model_bench = pd.DataFrame(benchmark.run_model(*base_table(FILES_VERSION)))
+        if "model_bench" in st.session_state:
+            mb = st.session_state.model_bench
+            m = st.columns(2, gap="large")
+            m[0].metric(t("model_bench_rules"), f"{int(mb['rules'].sum())}/{len(mb)}")
+            m[1].metric(t("model_bench_model"), f"{int(mb['with_model'].sum())}/{len(mb)}")
+            st.dataframe(mb, hide_index=True, column_config={
+                "rules": st.column_config.CheckboxColumn(t("model_bench_rules")),
+                "with_model": st.column_config.CheckboxColumn(t("model_bench_model")),
+                "seconds": st.column_config.NumberColumn("s", format="%.1f")})
 
 e = edited.set_index("product_id")
 catalog = catalog.assign(**{c: catalog["product_id"].map(e[c])
@@ -217,6 +239,33 @@ def record_order(lines, zone, when, prep="whole", payment="cash"):
     st.session_state.orders.append(order)
     return order
 
+def read_message(msg):
+    """Rules first. If they find no catalog product, Gemma on AMD reads the message (once per message,
+    kept in the session) and code keeps only what it can verify. Returns (check, model read or None)."""
+    check = guard.check_message(msg, table, settings, lang)
+    if check.items or not llm.is_configured():
+        return check, None
+    if msg not in st.session_state.model_reads:
+        with st.spinner(t("reading")):
+            st.session_state.model_reads[msg] = copilot.model_read(msg, table, settings)
+    data, res = st.session_state.model_reads[msg]
+    if data is None:
+        return check, {"res": res, "dropped": [], "used": False}
+    extracted, dropped = guard.check_extracted(msg, data, table, settings, lang)
+    if not extracted.items:  # the model found no catalog product either: answer with today's catch
+        return check, {"res": res, "dropped": dropped, "used": False}
+    return extracted, {"res": res, "dropped": dropped, "used": True}
+
+
+def read_caption(read):
+    res = read["res"]
+    secs = f" ({res.seconds:.1f} s)" if res.seconds else ""
+    if not read["used"]:
+        return t("model_read_none") + secs
+    return (t("model_read", s=i18n.source(res.source, lang)) + secs + ". "
+            + (t("model_dropped", d=", ".join(read["dropped"])) if read["dropped"] else t("model_kept")))
+
+
 with tab_reply:
     pick = st.selectbox(t("example_label"), EXAMPLES)
     msg = st.text_area(t("buyer_msg_label"), value=pick, height=90)
@@ -224,7 +273,7 @@ with tab_reply:
         if not msg.strip():
             st.info(t("paste_first"))
         else:
-            check = guard.check_message(msg, table, settings, lang)
+            check, _ = read_message(msg)
             with st.spinner(t("drafting")):
                 draft = copilot.draft_reply(msg, check, table, settings)
             st.session_state.active = msg
@@ -246,7 +295,7 @@ with tab_reply:
     if st.session_state.get("active"):
         active = st.session_state.active
         # Rules run again on every render, so flags, freshness and prices follow the clock, stock and settings
-        check = guard.check_message(active, table, settings, lang)
+        check, read = read_message(active)
         hold = st.session_state.replies["hold"]
         sc = analytics.offer_scenarios(check, table)
         left, right = st.columns(2, gap="large")
@@ -258,8 +307,13 @@ with tab_reply:
                 ui.info_card(t("menu_title"))
             else:
                 ui.safe_card(lang)
-            st.caption(t("parsed", items=describe_items(check, lang), zone=check.zone or "n/a",
+            st.caption(t("parsed" if not (read and read["used"]) else "parsed_model",
+                         items=describe_items(check, lang), zone=check.zone or "n/a",
                          when="n/a" if check.when_h is None else f"~{check.when_h} h"))
+            if read:
+                st.caption(":material/memory: " + read_caption(read))
+                if read["res"].error:
+                    st.warning(t("model_failed", e=read["res"].error))
         with right:
             if sc:
                 ln = sc["lines"]

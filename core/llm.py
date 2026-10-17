@@ -64,8 +64,9 @@ def _wait_seconds(resp, attempt):
     return retry_after + random.uniform(0, 0.3)
 
 
-def chat(messages, max_tokens=400, temperature=0.4, timeout=30):
-    """Returns (text, seconds). Raises LLMError with a readable message on any failure."""
+def chat(messages, max_tokens=400, temperature=0.4, timeout=30, json_mode=False):
+    """Returns (text, seconds). Raises LLMError with a readable message on any failure.
+    json_mode asks the endpoint for a JSON object (Token Factory accepts response_format json_object)."""
     cfg = config()
     if not all(cfg.values()):
         raise LLMError("AMD_API_BASE, AMD_API_KEY and AMD_MODEL must be set.")
@@ -77,6 +78,8 @@ def chat(messages, max_tokens=400, temperature=0.4, timeout=30):
         "max_tokens": max_tokens,
         "temperature": temperature,
     }
+    if json_mode:
+        payload["response_format"] = {"type": "json_object"}
     start = time.perf_counter()
     for attempt in range(MAX_RETRIES + 1):
         try:

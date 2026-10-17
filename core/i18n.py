@@ -101,6 +101,29 @@ TEXT = {
                 "El modelo marcó este pedido como inusual."),
     "parsed": ("Parsed by rules: {items} · zone={zone} · when={when}",
                "Leído por las reglas: {items} · zona={zone} · cuándo={when}"),
+    "parsed_model": ("Read by Gemma, checked by code: {items} · zone={zone} · when={when}",
+                     "Leído por Gemma, revisado por el código: {items} · zona={zone} · cuándo={when}"),
+    "reading": ("Gemma on AMD is reading the message...", "Gemma en AMD está leyendo el mensaje..."),
+    "model_read": ("The rules found no product, so {s} read the message",
+                   "Las reglas no encontraron producto, así que {s} leyó el mensaje"),
+    "model_kept": ("Code found every number in the message.", "El código encontró cada número en el mensaje."),
+    "model_dropped": ("Code dropped what it could not find in the message: {d}.",
+                      "El código descartó lo que no encontró en el mensaje: {d}."),
+    "model_read_none": ("The rules and Gemma on AMD found no product from your catalog.",
+                        "Ni las reglas ni Gemma en AMD encontraron un producto de su catálogo."),
+    "model_bench_expander": ("Gemma test: messages the rules cannot read",
+                             "Prueba de Gemma: mensajes que las reglas no pueden leer"),
+    "model_bench_caption": ("10 synthetic messages with slang, diminutives, typos and English fish names "
+                            "(tests/model_messages.jsonl). Gemma on AMD reads each one; code keeps only numbers "
+                            "written in the message and zones the seller serves, then the same rules set the flags. "
+                            "Runs 10 model calls.",
+                            "10 mensajes sintéticos con jerga, diminutivos, errores y nombres de pescado en inglés "
+                            "(tests/model_messages.jsonl). Gemma en AMD lee cada uno; el código solo acepta números "
+                            "escritos en el mensaje y zonas que el vendedor atiende, y las mismas reglas ponen los "
+                            "avisos. Hace 10 llamadas al modelo."),
+    "model_bench_btn": ("Run the test on AMD", "Correr la prueba en AMD"),
+    "model_bench_rules": ("Rules alone", "Solo reglas"),
+    "model_bench_model": ("Rules + Gemma on AMD", "Reglas + Gemma en AMD"),
     "from_total": (" (from total)", " (del total)"),
     "for_everything": ("L {offer} for everything", "L {offer} por todo"),
     "no_product": ("no product", "sin producto"),

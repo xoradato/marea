@@ -1,4 +1,5 @@
 """Prompts for the model on AMD, with template fallbacks so the demo never breaks."""
+import json
 import re
 from dataclasses import dataclass
 
@@ -92,6 +93,41 @@ def draft_reply(message, check, table, settings):
     reply = reply.strip()
     review = reply.startswith("[REVIEW]")
     return Result(_clean(reply), _clean(english), review, _source(), secs)
+
+
+READ_SYSTEM = """You read one message from a buyer of a small seafood seller in Honduras. The message may be in Spanish or English, with slang, diminutives ("camaroncitos"), typos or English fish names.
+Return one JSON object and nothing else:
+{"items": [{"product_id": "<id from CATALOG>", "lbs": <number or null>, "offer": <number or null>, "offer_is_total": <true if the price is for the whole order, else false>}],
+ "zone": "<one of ZONES exactly as written, or the place named if it is not in ZONES, or null>",
+ "when": "today" | "tomorrow" | "day_after" | null}
+Rules:
+- Only use products from CATALOG. If the buyer names no catalog product, return "items": [].
+- Copy numbers exactly as the buyer wrote them. Never guess, convert or compute a number. Use null when it is not written.
+- "offer" is the price the buyer proposes, not the seller's price."""
+
+
+def model_read(message, table, settings):
+    """Gemma on AMD reads a message the rules could not. Returns (fields dict or None, Result).
+
+    The fields are not trusted: guard.check_extracted keeps only what code can verify in the message."""
+    if not llm.is_configured():
+        return None, Result("", source="offline template (no AMD API key set)")
+    catalog = "\n".join(f"- {pid}: {r['name']} (also: {r['aliases'].replace('|', ', ')})"
+                        for pid, r in table.set_index("product_id").iterrows())
+    user = f"CATALOG:\n{catalog}\nZONES: {', '.join(settings['delivery_zones'])}\n\nMESSAGE:\n{message}"
+    try:
+        text, secs = llm.chat([
+            {"role": "system", "content": READ_SYSTEM},
+            {"role": "user", "content": user},
+        ], max_tokens=300, temperature=0, json_mode=True)
+    except llm.LLMError as e:
+        return None, Result("", source="offline template (model call failed)", error=str(e))
+    raw = text.strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+    try:
+        data = json.loads(raw[raw.find("{"):raw.rfind("}") + 1])
+    except ValueError:
+        return None, Result("", source=_source(), seconds=secs, error="The model did not return valid JSON.")
+    return data, Result("", source=_source(), seconds=secs)
 
 
 def _menu(table):

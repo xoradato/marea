@@ -1,0 +1,10 @@
+{"message": "hi! could I get 5 pounds of red snapper at 75 a pound, delivered tomorrow to Sambo Creek?", "product": "pargo", "qty_lbs": 5, "offer_per_lb": 75, "when": "mañana", "zone": "Sambo Creek", "must_flag": ["COUNTER_OFFER"]}
+{"message": "buenas tiene camaroncitos? ocupo como 6 libritas pa hoy", "product": "camarón", "qty_lbs": 6, "offer_per_lb": null, "when": "hoy"}
+{"message": "kmaron a 75 la lb, me manda 10 a tela mañana?", "product": "camarón", "qty_lbs": 10, "offer_per_lb": 75, "when": "mañana", "zone": "Tela", "must_flag": ["BELOW_FLOOR", "FRESHNESS"]}
+{"message": "Good morning, I need 3 lb of lobster tails for tonight in La Ceiba, I can pay 900 for all", "product": "langosta", "qty_lbs": 3, "offer_per_lb": 300, "when": "hoy", "zone": "La Ceiba", "must_flag": ["COUNTER_OFFER"]}
+{"message": "me guarda un par de robalitos? unas 4 libras, paso hoy", "product": "róbalo", "qty_lbs": 4, "offer_per_lb": null, "when": "hoy"}
+{"message": "oiga y el mackerel a cuanto? deme 10 lb a 35", "product": "macarela", "qty_lbs": 10, "offer_per_lb": 35, "when": null, "must_flag": ["COUNTER_OFFER"]}
+{"message": "quiero shrimp, 8 pounds, today, Jutiapa", "product": "camarón", "qty_lbs": 8, "offer_per_lb": null, "when": "hoy", "zone": "Jutiapa"}
+{"message": "buenas, de los pargitos rojos me aparta 6 libras a 80 para mañana?", "product": "pargo", "qty_lbs": 6, "offer_per_lb": 80, "when": "mañana", "must_flag": ["COUNTER_OFFER"]}
+{"message": "hello, do you have snook? 12 lbs please, day after tomorrow, Tela", "product": "róbalo", "qty_lbs": 12, "offer_per_lb": null, "when": "pasado mañana", "zone": "Tela", "must_flag": ["FRESHNESS"]}
+{"message": "me vende unos cangrejitos? 5 libras pa hoy", "product": "jaiba", "qty_lbs": 5, "offer_per_lb": null, "when": "hoy", "must_flag": ["OUT_OF_STOCK"]}

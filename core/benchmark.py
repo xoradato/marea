@@ -18,9 +18,12 @@ PRODUCT_IDS = {"camarón": "SHR", "pargo": "SNP", "róbalo": "SNK", "langosta": 
 WHEN_H = {"hoy": 0, "mañana": 24, "pasado mañana": 48, None: None}
 
 
-def load_cases():
+MODEL_CASE_FILE = "model_messages.jsonl"  # messages the rules alone cannot read
+
+
+def load_cases(files=CASE_FILES):
     cases = []
-    for name in CASE_FILES:
+    for name in files:
         lines = (CASES_DIR / name).read_text(encoding="utf-8").splitlines()
         cases += [json.loads(line) for line in lines if line.strip()]
     return cases
@@ -68,5 +71,30 @@ def run(table, settings):
             "message": case["message"],
             "problems": "; ".join(problems),
             "flags": ", ".join(code for code, _ in c.flags),
+        })
+    return results
+
+
+def run_model(table, settings):
+    """Rules alone vs. rules + Gemma on AMD on messages the rules cannot read. One model call per message."""
+    from core import copilot  # the rule benchmark above stays free of model calls
+
+    zones = {guard.normalize(z) for z in settings["delivery_zones"]}
+    results = []
+    for case in load_cases((MODEL_CASE_FILE,)):
+        rules = guard.check_message(case["message"], table, settings)
+        data, res = copilot.model_read(case["message"], table, settings)
+        if data is None:
+            problems, dropped = [res.error or "no model answer"], []
+        else:
+            c, dropped = guard.check_extracted(case["message"], data, table, settings)
+            problems = _problems(case, c, zones)
+        results.append({
+            "message": case["message"],
+            "rules": not _problems(case, rules, zones),
+            "with_model": not problems,
+            "problems": "; ".join(problems),
+            "dropped": ", ".join(dropped),
+            "seconds": res.seconds,
         })
     return results

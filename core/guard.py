@@ -152,16 +152,89 @@ def check_message(text, table, settings, lang="en"):
         if any(re.search(rf"\b{re.escape(normalize(p))}\b", t) for p in places):
             c.zone = zone
     c.delivery = c.zone is not None or any(w in t for w in DELIVERY_WORDS)
-
-    if "pasado manana" in t:  # with several dates, the latest one is checked (stricter on freshness)
-        c.when_h = 48
-    elif re.search(r"\b(?:hoy|ahorita)\b", t):  # "hoy en la mañana" means today
-        c.when_h = 0
-    elif "manana" in t:
-        c.when_h = 24
-
+    c.when_h = _when(t)
     c.flags = _flags(c, rows, settings, lang)
     return c
+
+
+def _when(t):
+    if "pasado manana" in t:  # with several dates, the latest one is checked (stricter on freshness)
+        return 48
+    if re.search(r"\b(?:hoy|ahorita)\b", t):  # "hoy en la mañana" means today
+        return 0
+    if "manana" in t:
+        return 24
+    return None
+
+
+MODEL_WHEN = {"today": 0, "tomorrow": 24, "day_after": 48}
+ENGLISH_DELIVERY = ("deliver", "bring", "send", "ship")
+ENGLISH_NUMBERS = {"half": 0.5, "one": 1, "two": 2, "three": 3, "four": 4, "five": 5, "six": 6, "seven": 7,
+                   "eight": 8, "nine": 9, "ten": 10, "twelve": 12, "fifteen": 15, "twenty": 20, "thirty": 30}
+
+
+def numbers_in(t):
+    """Every number written in the (normalized) message, as digits or as a word."""
+    found = {_num(n) for n in re.findall(r"\d{1,3},\d{3}|\d+(?:[.,]\d+)?", t)}
+    words = {**NUMBER_WORDS, **ENGLISH_NUMBERS}
+    return found | {v for w, v in words.items() if re.search(rf"\b{w}\b", t)}
+
+
+def check_extracted(text, data, table, settings, lang="en"):
+    """Build a Check from fields the model extracted, keeping only what code can verify.
+
+    The model may name a catalog product the rules missed ("camaroncitos", "red snapper"), but every
+    number must appear in the message, the zone must be one of the seller's zones and be written in the
+    message, and the same rules as check_message then decide the flags. Returns (check, dropped fields).
+    """
+    t = normalize(text)
+    rows = table.set_index("product_id")
+    c, dropped = Check(text=t), []
+    nums = numbers_in(t)
+
+    def value(raw, label):
+        try:
+            v = None if raw in (None, "") else float(raw)
+        except (TypeError, ValueError):
+            v = None
+        if v is not None and (v <= 0 or v not in nums):
+            dropped.append(f"{label} {raw}")
+            return None
+        return v
+
+    items = data.get("items") if isinstance(data, dict) else None
+    for raw in items if isinstance(items, list) else []:
+        if not isinstance(raw, dict):
+            continue
+        pid = raw.get("product_id")
+        if pid not in rows.index or pid in c.product_ids:
+            if pid:
+                dropped.append(f"product {pid}")
+            continue
+        item = Item(pid, qty_lbs=value(raw.get("lbs"), "lb"))
+        offer = value(raw.get("offer"), "L")
+        list_price = rows.loc[pid, "list_price"]
+        if offer is not None and item.qty_lbs and (raw.get("offer_is_total") is True or offer > list_price * 1.5):
+            item.offer_per_lb, item.offer_was_total = round(offer / item.qty_lbs, 2), True
+        elif offer is not None:
+            item.offer_per_lb = offer
+        c.items.append(item)
+
+    zone = data.get("zone") if isinstance(data, dict) else None
+    if zone in settings["delivery_zones"]:
+        places = [zone] + settings.get("zone_aliases", {}).get(zone, [])
+        if any(re.search(rf"\b{re.escape(normalize(p))}\b", t) for p in places):
+            c.zone = zone
+        else:
+            dropped.append(f"zone {zone}")
+    elif zone:
+        c.delivery = True  # a place outside the seller's zones: the rules flag it below
+    c.delivery = c.delivery or c.zone is not None or any(w in t for w in DELIVERY_WORDS + ENGLISH_DELIVERY)
+    c.when_h = _when(t)
+    if c.when_h is None:
+        c.when_h = MODEL_WHEN.get(data.get("when") if isinstance(data, dict) else None)
+    c.flags = _flags(c, rows, settings, lang)
+    return c, dropped
 
 
 def _flags(c, rows, settings, lang):
