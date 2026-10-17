@@ -6,6 +6,8 @@ no eyebrow labels, status always carries text, WCAG AA contrast on every text/ba
 """
 import streamlit as st
 
+from core.i18n import t
+
 # Tide line: two offset waves in the page colour along the bottom edge of the header
 TIDE = ("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1440 40' "
         "preserveAspectRatio='none'><path d='M0,22 C240,40 480,4 720,22 C960,40 1200,4 1440,22 L1440,40 L0,40 Z' "
@@ -39,22 +41,21 @@ def inject_css():
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-def header(model_connected, model_name, seller):
+def header(model_connected, model_name, seller, lang="en"):
     with st.container(key="hero"):
         st.title(":material/waves: Marea", anchor=False)
-        st.markdown("Drafts replies to buyers on WhatsApp and Marketplace, flags the deals you should "
-                    "decide yourself, and tells you what to sell before it spoils.")
-        status = (f":material/memory: Replies drafted by **{model_name}** on AMD GPUs." if model_connected
-                  else ":material/cloud_off: AMD model not connected yet: replies use offline templates.")
-        st.markdown(f"{status} Demo seller: {seller}. All data is synthetic.")
+        st.markdown(t("tagline", lang))
+        status = (":material/memory: " + t("model_on", lang, model=model_name) if model_connected
+                  else ":material/cloud_off: " + t("model_off", lang))
+        st.markdown(f"{status} {t('demo_seller', lang, seller=seller)}")
 
 
-def decide_card(reasons):
+def decide_card(reasons, lang="en"):
     with st.container(key="decide"):
-        st.markdown(":material/front_hand: **DECIDE TÚ.** This one needs you before sending.")
+        st.markdown(":material/front_hand: " + t("decide_title", lang))
         st.markdown("\n".join(f"- {r}" for r in reasons))
 
 
-def safe_card():
+def safe_card(lang="en"):
     with st.container(key="safe"):
-        st.markdown(":material/check_circle: **Ready to send.** No rule triggered. Read the draft and send it.")
+        st.markdown(":material/check_circle: " + t("safe_title", lang))

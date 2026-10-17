@@ -6,6 +6,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from core import i18n
+
 DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 MA_DAYS = 14             # forecast = average lb/day over the last 14 days
 MARKDOWN_SHELF_SHARE = 0.5  # only mark down lots with half or less of their shelf life left
@@ -31,7 +33,7 @@ def _lbs_by_product(sales, days, offset_days=0):
     return window.groupby("product_id")
 
 
-def product_table(catalog, sales, inventory, as_of, hours_ahead=0):
+def product_table(catalog, sales, inventory, as_of, hours_ahead=0, lang="en"):
     """One row per product with demand, margin, freshness and the rule-based action.
 
     hours_ahead simulates the clock moving forward: stock drops at the 14-day average
@@ -64,35 +66,34 @@ def product_table(catalog, sales, inventory, as_of, hours_ahead=0):
     t["value_at_risk"] = (t["at_risk_lbs"] * t["unit_cost"]).round(0)
 
     actions = pd.DataFrame(
-        [_action(row) for row in t.itertuples()],
+        [_action(row, lang) for row in t.itertuples()],
         index=t.index,
         columns=["action", "suggested_price", "reorder_lbs", "reason"],
     )
     return t.join(actions).reset_index()
 
 
-def _action(r):
+def _action(r, lang="en"):
     """Fixed rules. Order matters: out of stock, spoiled, spoilage risk, then low cover."""
     if r.stock_lbs <= 0:
         qty = math.ceil(r.avg_daily_lbs * RESTOCK_COVER_DAYS)
         return ("Restock", r.list_price, qty,
-                f"Out of stock. Sells {r.avg_daily_lbs} lb/day (14-day average), "
-                f"so buy {qty} lb to cover {RESTOCK_COVER_DAYS} days.")
+                i18n.reason("Restock", lang, avg=r.avg_daily_lbs, qty=qty, days=RESTOCK_COVER_DAYS))
     if r.hours_left <= 0:
         return ("Discard", r.list_price, 0,
-                f"Past its {r.shelf_life_h:.0f} h shelf life: {r.stock_lbs:g} lb lost "
-                f"(L {r.stock_lbs * r.unit_cost:,.0f} at cost).")
+                i18n.reason("Discard", lang, shelf=f"{r.shelf_life_h:.0f}", stock=f"{r.stock_lbs:g}",
+                            loss=f"{r.stock_lbs * r.unit_cost:,.0f}"))
     if r.hours_left <= r.shelf_life_h * MARKDOWN_SHELF_SHARE and r.at_risk_lbs > 0:
         pct = 0.15 if r.at_risk_lbs / r.stock_lbs > 0.4 else 0.10
         price = max(r.floor_price, round(r.list_price * (1 - pct)))
         return ("Mark down", price, 0,
-                f"{r.at_risk_lbs:g} of {r.stock_lbs:g} lb may not sell in the {r.hours_left:.0f} h of "
-                f"freshness left. {pct:.0%} off gives L {price}/lb (never below floor L {r.floor_price}).")
+                i18n.reason("Mark down", lang, risk=f"{r.at_risk_lbs:g}", stock=f"{r.stock_lbs:g}",
+                            hours=f"{r.hours_left:.0f}", pct=f"{pct:.0%}", price=price, floor=r.floor_price))
     if r.days_of_cover < 1:
         qty = math.ceil(r.avg_daily_lbs * RESTOCK_COVER_DAYS - r.stock_lbs)
         return ("Restock soon", r.list_price, qty,
-                f"Only {r.days_of_cover} days of stock at {r.avg_daily_lbs} lb/day. Buy {qty} lb.")
-    return ("OK", r.list_price, 0, "Stock and freshness are in line with demand.")
+                i18n.reason("Restock soon", lang, cover=r.days_of_cover, avg=r.avg_daily_lbs, qty=qty))
+    return ("OK", r.list_price, 0, i18n.reason("OK", lang))
 
 
 def deal_summary(check, table, settings):

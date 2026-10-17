@@ -4,7 +4,7 @@ import os
 import pandas as pd
 import streamlit as st
 
-from core import analytics, benchmark, copilot, guard, llm, ui
+from core import analytics, benchmark, copilot, guard, i18n, llm, ui
 
 st.set_page_config(page_title="Marea", page_icon=":material/waves:", layout="wide")
 ui.inject_css()
@@ -25,7 +25,8 @@ EXAMPLES = [
     "vecino aparteme tres libras de camaron para hoy y se las pago el viernes q me caiga la quincena",
     "buenas ocupo 8 libras de camaron, 6 de jaiba y cuatro de robalo, le doy 1100 lps por todo puesto mañana en sambo creek",
 ]
-EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs"]
+EDITABLE = ["list_price", "floor_price", "unit_cost", "stock_lbs", "shelf_life_h"]
+WHEN_ES = {0: "hoy", 24: "mañana", 48: "pasado mañana"}
 
 
 def files_version():
@@ -44,14 +45,17 @@ def buyers_list(version):
     return analytics.load_buyers()
 
 
-DAYS_ES = ["lun", "mar", "mié", "jue", "vie", "sáb", "dom"]
-MONTHS_ES = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"]
+@st.cache_data
+def parser_benchmark(version):
+    """Scored on the shipped synthetic data, not on the seller's edits or the simulated clock."""
+    catalog, sales, inventory, settings = load(version)
+    base = analytics.product_table(catalog, sales, inventory, pd.Timestamp(settings["as_of"]))
+    return pd.DataFrame(benchmark.run(base, settings))
 
 
 def receipt_text(order, business):
-    t = order["time"]
-    lines = [f"*{business}* · Nota de pedido #{order['n']}",
-             f"{DAYS_ES[t.weekday()]} {t.day} {MONTHS_ES[t.month - 1]} {t.year}, {t:%H:%M}", ""]
+    """Always in Spanish: it goes to the buyer."""
+    lines = [f"*{business}* · Nota de pedido #{order['n']}", i18n.stamp(order["time"], "es"), ""]
     lines += [f"- {ln['lbs']:g} lb {ln['product']} × L {ln['price']:g} = L {ln['lbs'] * ln['price']:,.0f}"
               for ln in order["lines"]]
     if order["fee"]:
@@ -61,24 +65,16 @@ def receipt_text(order, business):
     return "\n".join(lines)
 
 
-@st.cache_data
-def parser_benchmark(version):
-    """Scored on the shipped synthetic data, not on the seller's edits or the simulated clock."""
-    catalog, sales, inventory, settings = load(version)
-    base = analytics.product_table(catalog, sales, inventory, pd.Timestamp(settings["as_of"]))
-    return pd.DataFrame(benchmark.run(base, settings))
-
-
-def describe_items(check):
+def describe_items(check, lang):
     parts = []
     for it in check.items:
         part = names[it.pid] + (f" {it.qty_lbs:g} lb" if it.qty_lbs else "")
         if it.offer_per_lb is not None:
-            part += f" @ L {it.offer_per_lb:g}/lb" + (" (from total)" if it.offer_was_total else "")
+            part += f" @ L {it.offer_per_lb:g}/lb" + (i18n.t("from_total", lang) if it.offer_was_total else "")
         parts.append(part)
     if check.bundle_offer is not None:
-        parts.append(f"L {check.bundle_offer:g} for everything")
-    return "; ".join(parts) or "no product"
+        parts.append(i18n.t("for_everything", lang, offer=f"{check.bundle_offer:g}"))
+    return "; ".join(parts) or i18n.t("no_product", lang)
 
 
 FILES_VERSION = files_version()
@@ -90,72 +86,93 @@ for name, empty in (("log", []), ("sold", {}), ("orders", []), ("flash", {})):
     if name not in st.session_state:
         st.session_state[name] = empty
 
-ui.header(llm.is_configured(), llm.model_name(), settings["business_name"])
+with st.sidebar:
+    lang = st.radio("Language / Idioma", list(i18n.LANGS), format_func=i18n.LANGS.get,
+                    horizontal=True, key="lang")
+
+
+def t(key, **kw):
+    return i18n.t(key, lang, **kw)
+
+
+ui.header(llm.is_configured(), llm.model_name(), settings["business_name"], lang)
 
 with st.sidebar:
-    st.subheader(":material/tune: Controls")
-    hours_ahead = st.slider("Simulate time: hours from now", 0, 36, 0, step=3,
-                            help="Stock sells at the 14-day average and every lot ages. No restocking.")
-    st.caption(f"Demo clock: {as_of + pd.Timedelta(hours=hours_ahead):%a %d %b %Y, %H:%M}"
-               + (" (simulated)" if hours_ahead else ""))
-    settings["closed_season"] = st.multiselect(
-        "Closed season (set by you)", list(names), format_func=names.get)
+    st.subheader(":material/tune: " + t("controls"))
+    hours_ahead = st.slider(t("sim_slider"), 0, 36, 0, step=3, help=t("sim_help"), key="hours")
+    st.caption(t("demo_clock", t=i18n.stamp(as_of + pd.Timedelta(hours=hours_ahead), lang))
+               + (t("simulated") if hours_ahead else ""))
+    settings["closed_season"] = st.multiselect(t("closed_season"), list(names), format_func=names.get,
+                                               key="closed")
     st.divider()
-    st.subheader(":material/timer: Time saved (estimate)")
-    manual_s = st.number_input("Seconds to write a reply by hand", 10, 600, 90)
-    review_s = st.number_input("Seconds to review a draft", 5, 300, 15)
+    st.subheader(":material/timer: " + t("time_saved"))
+    manual_s = st.number_input(t("manual_s"), 10, 600, 90, key="manual_s")
+    review_s = st.number_input(t("review_s"), 5, 300, 15, key="review_s")
     metrics_box = st.container()
-    st.caption("Assumption-based estimate, not a measurement. All data is synthetic.")
+    st.caption(t("time_note"))
 
 tab_reply, tab_dash, tab_recs, tab_setup = st.tabs(
-    [":material/chat: Reply to a buyer", ":material/monitoring: Dashboard",
-     ":material/checklist: What to do today", ":material/inventory_2: Your catalog"])
+    [":material/chat: " + t("tab_reply"), ":material/monitoring: " + t("tab_dash"),
+     ":material/checklist: " + t("tab_recs"), ":material/inventory_2: " + t("tab_catalog")])
 
 # Rendered last in the tab bar, but runs first so every tab uses the edited values
 with tab_setup:
-    st.write("Your prices, floor prices and stock at the start of the day. Edit any cell; "
-             "changes apply to this session only.")
+    st.write(t("catalog_intro"))
     if st.session_state.sold:
-        st.caption("Sold through Marea this session (already taken off the stock everywhere else): "
+        st.caption(t("sold_caption")
                    + ", ".join(f"{names[p]} {lbs:g} lb" for p, lbs in st.session_state.sold.items()))
     current = catalog.merge(inventory[["product_id", "stock_lbs"]], on="product_id")
     edited = st.data_editor(
         current[["product_id", "name"] + EDITABLE],
         hide_index=True,
         disabled=["product_id", "name"],
-        column_config={c: st.column_config.NumberColumn(min_value=0) for c in EDITABLE},
+        column_order=["name"] + EDITABLE,
+        column_config={
+            "name": t("col_product"),
+            "list_price": st.column_config.NumberColumn(t("col_list"), min_value=0, format="L %d"),
+            "floor_price": st.column_config.NumberColumn(t("col_floor"), min_value=0, format="L %d"),
+            "unit_cost": st.column_config.NumberColumn(t("col_cost"), min_value=0, format="L %d"),
+            "stock_lbs": st.column_config.NumberColumn(t("col_stock_start"), min_value=0, format="%.1f lb"),
+            "shelf_life_h": st.column_config.NumberColumn(t("col_shelf"), min_value=1, max_value=240, format="%d h"),
+        },
         key="catalog_editor",
     )
-    for _, r in edited[edited["floor_price"] > edited["list_price"]].iterrows():
-        st.warning(f"{r['name']}: floor price is above list price.")
+    for _, r in edited.iterrows():
+        vals = {"name": r["name"], "list": r["list_price"], "floor": r["floor_price"], "cost": r["unit_cost"]}
+        if r["floor_price"] > r["list_price"]:
+            st.warning(t("warn_floor_above", **vals))
+        elif r["list_price"] > 3 * r["floor_price"]:
+            st.warning(t("warn_typo", **vals))
+        if r["unit_cost"] > r["floor_price"]:
+            st.warning(t("warn_cost", **vals))
     zones = ", ".join(f"{z} (L {fee})" for z, fee in settings["delivery_zones"].items())
-    st.markdown(f"**Delivery zones:** {zones}  \n**Delivery hours:** {settings['delivery_hours']}  \n"
-                f"**Minimum order:** {settings['min_order_lbs']} lb  \n**Reply tone:** {settings['tone']}")
-    with st.expander("Parser benchmark: how well the rules read buyer messages"):
+    st.markdown("  \n".join([t("zones", zones=zones), t("hours", hours=settings["delivery_hours"]),
+                             t("min_order", lbs=settings["min_order_lbs"]), t("tone", tone=settings["tone"])]))
+    with st.expander(t("bench_expander")):
         bench = parser_benchmark(FILES_VERSION)
-        st.metric("Synthetic messages parsed correctly", f"{int(bench['ok'].sum())}/{len(bench)}")
+        st.metric(t("bench_metric"), f"{int(bench['ok'].sum())}/{len(bench)}")
         for _, r in bench[~bench["ok"]].iterrows():
-            st.markdown(f"- **Fails:** *{r['message']}*  \n  {r['problems']}")
+            st.markdown(f"- **{t('bench_fails')}:** *{r['message']}*  \n  {r['problems']}")
         st.dataframe(bench, hide_index=True)
-        st.caption("Checks product, pounds, offer, date, zone and DECIDE TÚ flags against hand-reviewed labels "
-                   "(tests/*.jsonl). Messages are synthetic, written in Honduran WhatsApp style.")
+        st.caption(t("bench_caption"))
 
 e = edited.set_index("product_id")
-catalog = catalog.assign(**{c: catalog["product_id"].map(e[c]) for c in ["list_price", "floor_price", "unit_cost"]})
+catalog = catalog.assign(**{c: catalog["product_id"].map(e[c])
+                            for c in ["list_price", "floor_price", "unit_cost", "shelf_life_h"]})
 sold = inventory["product_id"].map(st.session_state.sold).fillna(0)
 inventory = inventory.assign(stock_lbs=(inventory["product_id"].map(e["stock_lbs"]) - sold).clip(lower=0))
-table = analytics.product_table(catalog, sales, inventory, as_of, hours_ahead)
+table = analytics.product_table(catalog, sales, inventory, as_of, hours_ahead, lang)
 rows = table.set_index("product_id")
 
 with tab_reply:
-    pick = st.selectbox("Example buyer message (synthetic)", EXAMPLES)
-    msg = st.text_area("Buyer message (paste from WhatsApp or Marketplace)", value=pick, height=90)
-    if st.button("Draft reply", type="primary"):
+    pick = st.selectbox(t("example_label"), EXAMPLES)
+    msg = st.text_area(t("buyer_msg_label"), value=pick, height=90)
+    if st.button(t("draft_btn"), type="primary"):
         if not msg.strip():
-            st.info("Paste a buyer message first.")
+            st.info(t("paste_first"))
         else:
-            check = guard.check_message(msg, table, settings)
-            with st.spinner("Drafting on AMD..."):
+            check = guard.check_message(msg, table, settings, lang)
+            with st.spinner(t("drafting")):
                 draft = copilot.draft_reply(msg, check, table, settings)
             st.session_state.active = msg
             st.session_state.replies = {"hold": draft}
@@ -176,86 +193,79 @@ with tab_reply:
     if st.session_state.get("active"):
         active = st.session_state.active
         # Rules run again on every render, so flags, freshness and prices follow the clock, stock and settings
-        check = guard.check_message(active, table, settings)
+        check = guard.check_message(active, table, settings, lang)
         hold = st.session_state.replies["hold"]
         sc = analytics.offer_scenarios(check, table)
         left, right = st.columns(2)
         with left:
             if check.flags or hold.review:
-                ui.decide_card([m for _, m in check.flags]
-                               + (["The model marked this request as unusual."] if hold.review else []))
+                ui.decide_card([m for _, m in check.flags] + ([t("unusual")] if hold.review else []), lang)
             else:
-                ui.safe_card()
-            st.caption(
-                f"Parsed by rules: {describe_items(check)} · zone={check.zone or 'n/a'} · "
-                f"when={'n/a' if check.when_h is None else f'~{check.when_h} h'}")
+                ui.safe_card(lang)
+            st.caption(t("parsed", items=describe_items(check, lang), zone=check.zone or "n/a",
+                         when="n/a" if check.when_h is None else f"~{check.when_h} h"))
         with right:
             if sc:
                 ln = sc["lines"]
                 counter_p = ", ".join(f"L {c:g}" for c in ln["counter"])
                 offer_p = ", ".join(f"L {o:g}" for o in ln["offer"])
-                options = {"hold": "Hold: ask to wait", "counter": f"Counter at {counter_p}/lb",
-                           "accept": f"Accept {offer_p}/lb"}
-                mode = st.radio("Your decision", list(options), format_func=options.get, horizontal=True,
+                options = {"hold": t("opt_hold"), "counter": t("opt_counter", p=counter_p),
+                           "accept": t("opt_accept", p=offer_p)}
+                mode = st.radio(t("decision"), list(options), format_func=options.get, horizontal=True,
                                 key=f"mode_{abs(hash(active))}")
                 cache_key = f"{mode}:{counter_p if mode == 'counter' else offer_p}"
                 if mode != "hold" and cache_key not in st.session_state.replies:
-                    with st.spinner("Drafting on AMD..."):
+                    with st.spinner(t("drafting")):
                         st.session_state.replies[cache_key] = copilot.draft_counter(
                             active, check, sc, table, settings, accept=(mode == "accept"))
                 draft = hold if mode == "hold" else st.session_state.replies[cache_key]
             else:
                 draft = hold
-            st.text_area("Reply to send (edit before sending)", draft.text, height=130)
-            if draft.english:
+            st.text_area(t("reply_label"), draft.text, height=130)
+            if draft.english and lang == "en":
                 st.caption(f"EN: {draft.english}")
-            st.caption(f"Source: {draft.source}" + (f" · {draft.seconds:.1f} s" if draft.seconds else ""))
+            st.caption(t("source", s=i18n.source(draft.source, lang))
+                       + (f" · {draft.seconds:.1f} s" if draft.seconds else ""))
             if draft.error:
-                st.warning(f"Model call failed, showing a template instead: {draft.error}")
+                st.warning(t("model_failed", e=draft.error))
 
         deal = analytics.deal_summary(check, table, settings)
         if deal:
-            st.markdown("**If you accept as written**")
+            st.markdown(t("deal_title"))
             d = st.columns(2) + st.columns(2)
-            d[0].metric("Order value", f"L {deal['revenue']:,.0f}")
-            d[1].metric("Product cost", f"L {deal['cost']:,.0f}")
-            d[2].metric(f"Gross profit ({deal['margin']:.0%} margin)", f"L {deal['profit']:,.0f}")
-            d[3].metric("vs. your list price", f"L {deal['vs_list']:,.0f}")
+            d[0].metric(t("order_value"), f"L {deal['revenue']:,.0f}")
+            d[1].metric(t("product_cost"), f"L {deal['cost']:,.0f}")
+            d[2].metric(t("gross_profit_m", m=f"{deal['margin']:.0%}"), f"L {deal['profit']:,.0f}")
+            d[3].metric(t("vs_list"), f"L {deal['vs_list']:,.0f}")
             fee = deal["delivery_fee"]
-            st.caption("Computed with code from the parsed offer (list price where no offer was given). "
-                       + (f"Delivery to {check.zone}: L {fee}, charged to the buyer." if fee is not None
-                          else "No delivery fee included."))
+            st.caption(t("deal_caption") + (t("fee_note", zone=check.zone, fee=fee) if fee is not None
+                                            else t("no_fee")))
 
         if sc:
-            st.subheader("Sell now or wait?")
+            st.subheader(t("sell_or_wait"))
             s = st.columns(3)
-            s[0].metric("Accept offer", f"L {sc['accept']:,.0f}")
-            s[0].caption(f"{sc['spoil_accept_lbs']:.0f} lb would still spoil")
-            s[1].metric("Counter-offer", f"L {sc['counter']:,.0f}")
-            s[1].caption("if the buyer takes it")
-            s[2].metric("Reject and wait", f"L {sc['wait']:,.0f}")
-            s[2].caption(f"{sc['spoil_wait_lbs']:.0f} lb spoil (L {sc['spoil_wait_cost']:,.0f} at cost)")
+            s[0].metric(t("accept_offer"), f"L {sc['accept']:,.0f}")
+            s[0].caption(t("still_spoil", lbs=f"{sc['spoil_accept_lbs']:.0f}"))
+            s[1].metric(t("counter_offer"), f"L {sc['counter']:,.0f}")
+            s[1].caption(t("if_takes"))
+            s[2].metric(t("reject_wait"), f"L {sc['wait']:,.0f}")
+            s[2].caption(t("spoil_cost", lbs=f"{sc['spoil_wait_lbs']:.0f}", cost=f"{sc['spoil_wait_cost']:,.0f}"))
             ln = sc["lines"]
             walk = "; ".join(f"{p} L {w:g}/lb" for p, w in zip(ln["product"], ln["walk_away"]))
             if sc["accept"] >= sc["wait"]:
-                verdict = f"Selling now at the buyer's price brings **L {sc['accept'] - sc['wait']:,.0f} more** than waiting. "
-                verdict += ("Every pound in this order would otherwise spoil, so any price beats waiting."
-                            if (ln["walk_away"] == 0).all() else f"Selling now beats waiting at any price above: {walk}.")
+                verdict = t("v_sell_more", diff=f"{sc['accept'] - sc['wait']:,.0f}")
+                verdict += t("v_any_price") if (ln["walk_away"] == 0).all() else t("v_above", walk=walk)
                 if (ln["offer"] < ln["floor"]).any():
-                    verdict += " The offer is below your floor price, but the numbers favor selling. Your call."
+                    verdict += t("v_below_floor")
             else:
-                verdict = (f"Waiting brings **L {sc['wait'] - sc['accept']:,.0f} more** than this offer. "
-                           f"Below {walk}, selling now loses against waiting.")
+                verdict = t("v_wait_more", diff=f"{sc['wait'] - sc['accept']:,.0f}", walk=walk)
             st.markdown(verdict)
-            with st.expander("How this is calculated"):
-                st.markdown(
-                    "Lempiras each option brings in from the lots involved. Other buyers take the 14-day average "
-                    "(lb/day) until the lot's freshness runs out; whatever is left then spoils. Fish already on ice "
-                    "is a sunk cost, so the options are compared on money in. The counter-offer splits the "
-                    "difference between the offer and your list price, never below the walk-away price.")
+            with st.expander(t("how_calc")):
+                st.markdown(t("how_calc_text"))
                 st.dataframe(ln.drop(columns=["pid", "unit_cost"]), hide_index=True)
+
         if check.items:
-            st.subheader("Close the order")
+            st.subheader(t("close_order"))
             offered = analytics.offer_prices(check, table)
             if mode == "counter":
                 offered = dict(zip(sc["lines"]["pid"], sc["lines"]["counter"]))
@@ -267,26 +277,29 @@ with tab_reply:
             cart = st.data_editor(
                 cart, hide_index=True, num_rows="dynamic", key=f"cart_{abs(hash(active))}_{mode}",
                 column_config={
-                    "product": st.column_config.SelectboxColumn("Product", options=list(names.values()), required=True),
-                    "lbs": st.column_config.NumberColumn("Pounds", min_value=0, format="%.1f"),
-                    "price_per_lb": st.column_config.NumberColumn("Price / lb", min_value=0, format="L %d"),
+                    "product": st.column_config.SelectboxColumn(t("col_product"), options=list(names.values()),
+                                                                required=True),
+                    "lbs": st.column_config.NumberColumn(t("cart_pounds"), min_value=0, format="%.1f"),
+                    "price_per_lb": st.column_config.NumberColumn(t("cart_price"), min_value=0, format="L %d"),
                 })
-            st.caption("Prefilled with what the buyer asked for, capped at your stock. Edit pounds and prices "
-                       "to what you agreed before confirming.")
-            if st.button("Confirm order and update stock", type="primary"):
+            st.caption(t("cart_caption"))
+            if st.button(t("confirm_btn"), type="primary"):
                 ids = {v: k for k, v in names.items()}
                 cart = cart.dropna(subset=["product"])
                 cart = cart[cart["lbs"].fillna(0) > 0]
-                errors = [f"{r['product']}: only {rows.loc[ids[r['product']], 'stock_lbs']:g} lb on ice."
+                errors = [t("only_x", product=r["product"], stock=f"{rows.loc[ids[r['product']], 'stock_lbs']:g}")
                           for _, r in cart.iterrows() if r["lbs"] > rows.loc[ids[r["product"]], "stock_lbs"]]
                 if cart.empty:
-                    st.error("Add at least one product with pounds before confirming.")
+                    st.error(t("err_empty"))
                 elif errors:
-                    st.error("Not enough stock. " + " ".join(errors))
+                    st.error(t("err_stock") + " ".join(errors))
                 else:
+                    rescued = 0.0
                     for _, r in cart.iterrows():
                         pid = ids[r["product"]]
                         st.session_state.sold[pid] = st.session_state.sold.get(pid, 0) + float(r["lbs"])
+                        # pounds the forecast said would spoil, sold instead
+                        rescued += min(float(r["lbs"]), rows.loc[pid, "at_risk_lbs"]) * float(r["price_per_lb"])
                     today = any(code == "FRESHNESS" for code, _ in check.flags)
                     order = {
                         "n": len(st.session_state.orders) + 1,
@@ -296,126 +309,125 @@ with tab_reply:
                         "revenue": float((cart["lbs"] * cart["price_per_lb"]).sum()),
                         "cost": float(sum(r["lbs"] * rows.loc[ids[r["product"]], "unit_cost"]
                                           for _, r in cart.iterrows())),
+                        "rescued": rescued,
                         "zone": check.zone,
                         "fee": settings["delivery_zones"].get(check.zone) if check.zone else None,
-                        "when": {0: "hoy", 24: "mañana", 48: "pasado mañana"}.get(0 if today else check.when_h),
+                        "when": WHEN_ES.get(0 if today else check.when_h),
                     }
                     st.session_state.orders.append(order)
                     st.session_state.receipt = receipt_text(order, settings["business_name"])
                     st.rerun()
         if st.session_state.get("receipt"):
-            st.success("Order confirmed. Stock, dashboard and today's actions are updated.")
+            st.success(t("order_confirmed"))
             st.code(st.session_state.receipt, language=None, wrap_lines=True)
-            st.caption("WhatsApp receipt: copy it with the button in the corner.")
+            st.caption(t("receipt_caption"))
 
     if st.session_state.log:
-        st.subheader("Messages handled this session")
-        st.dataframe(pd.DataFrame(st.session_state.log[::-1]), hide_index=True)
+        st.subheader(t("log_title"))
+        log_df = pd.DataFrame(st.session_state.log[::-1])
+        log_df["source"] = log_df["source"].map(lambda s: i18n.source(s, lang))
+        st.dataframe(log_df, hide_index=True, column_config={
+            "message": t("log_message"), "decide_tu": st.column_config.CheckboxColumn("DECIDE TÚ"),
+            "reasons": t("log_reasons"), "source": t("log_source")})
 
 with tab_dash:
+    orders = st.session_state.orders
+    st.subheader(t("session_title"))
+    o = st.columns(2) + st.columns(2)
+    o[0].metric(t("orders"), len(orders))
+    o[1].metric(t("sales"), f"L {sum(x['revenue'] for x in orders):,.0f}")
+    o[2].metric(t("rescued"), f"L {sum(x['rescued'] for x in orders):,.0f}")
+    o[3].metric(t("flagged"), sum(1 for x in st.session_state.log if x["decide_tu"]))
+    st.caption(t("session_caption"))
+
     revenue = table["revenue_30d"].sum()
     margin = table["margin_30d"].sum()
     k = st.columns(2) + st.columns(2)  # 2x2 so values never truncate on narrow screens
-    k[0].metric("Revenue, last 30 days", f"L {revenue:,.0f}")
-    k[1].metric(f"Gross margin ({margin / revenue:.0%})", f"L {margin:,.0f}")
-    k[2].metric(f"At risk of spoiling (L {table['value_at_risk'].sum():,.0f} at cost)",
-                f"{table['at_risk_lbs'].sum():.0f} lb")
-    k[3].metric("Products needing action", int((table["action"] != "OK").sum()))
-    if st.session_state.orders:
-        orders = st.session_state.orders
-        o_rev = sum(o["revenue"] for o in orders)
-        o_profit = o_rev - sum(o["cost"] for o in orders)
-        st.subheader("Confirmed in Marea this session")
-        o = st.columns(3)
-        o[0].metric("Orders", len(orders))
-        o[1].metric("Sales", f"L {o_rev:,.0f}")
-        o[2].metric("Gross profit", f"L {o_profit:,.0f}")
-    st.subheader("Daily revenue, last 30 days")
-    st.bar_chart(analytics.daily_revenue(sales), color="#0C6E7A")
-    st.subheader("Lots on ice")
+    k[0].metric(t("revenue_30d"), f"L {revenue:,.0f}")
+    k[1].metric(t("gross_margin", m=f"{margin / revenue:.0%}"), f"L {margin:,.0f}")
+    k[2].metric(t("at_risk", v=f"{table['value_at_risk'].sum():,.0f}"), f"{table['at_risk_lbs'].sum():.0f} lb")
+    k[3].metric(t("need_action"), int((table["action"] != "OK").sum()))
+    st.subheader(t("daily_rev"))
+    st.bar_chart(analytics.daily_revenue(sales).rename(t("revenue_series")), color="#0C6E7A")
+    st.subheader(t("lots"))
     st.dataframe(
-        table[
+        table.assign(action=table["action"].map(lambda a: i18n.action(a, lang)))[
             ["name", "stock_lbs", "hours_left", "avg_daily_lbs", "trend_pct", "at_risk_lbs",
              "days_of_cover", "margin_pct", "action"]],
         hide_index=True,
         column_config={
-            "name": "Product",
-            "stock_lbs": st.column_config.NumberColumn("Stock", format="%.1f lb"),
-            "hours_left": st.column_config.ProgressColumn("Freshness left", min_value=0, max_value=72, format="%d h"),
-            "avg_daily_lbs": st.column_config.NumberColumn("Sells / day", format="%.1f lb"),
-            "trend_pct": st.column_config.NumberColumn("Trend", format="%+d%%"),
-            "at_risk_lbs": st.column_config.NumberColumn("At risk", format="%.1f lb"),
-            "days_of_cover": st.column_config.NumberColumn("Days of stock", format="%.1f"),
-            "margin_pct": st.column_config.NumberColumn("Margin", format="%d%%"),
-            "action": "Action",
+            "name": t("col_product"),
+            "stock_lbs": st.column_config.NumberColumn(t("col_stock"), format="%.1f lb"),
+            "hours_left": st.column_config.ProgressColumn(t("col_fresh"), min_value=0, max_value=72, format="%d h"),
+            "avg_daily_lbs": st.column_config.NumberColumn(t("col_sells"), format="%.1f lb"),
+            "trend_pct": st.column_config.NumberColumn(t("col_trend"), format="%+d%%"),
+            "at_risk_lbs": st.column_config.NumberColumn(t("col_risk"), format="%.1f lb"),
+            "days_of_cover": st.column_config.NumberColumn(t("col_days"), format="%.1f"),
+            "margin_pct": st.column_config.NumberColumn(t("col_margin"), format="%d%%"),
+            "action": t("col_action"),
         })
-    st.caption("Computed with pandas, no LLM. Forecast = 14-day moving average of lb sold per day. "
-               "At risk = stock − (avg lb/day × hours of freshness left ÷ 24).")
+    st.caption(t("dash_caption"))
 
 with tab_recs:
-    st.write("Actions come from fixed rules in code. The model on AMD only explains them in plain words.")
+    st.write(t("recs_intro"))
     st.dataframe(
-        table[
+        table.assign(action=table["action"].map(lambda a: i18n.action(a, lang)))[
             ["name", "action", "suggested_price", "reorder_lbs", "reason"]],
         hide_index=True,
         column_config={
-            "name": "Product",
-            "action": "Action",
-            "suggested_price": st.column_config.NumberColumn("Price today", format="L %d"),
-            "reorder_lbs": st.column_config.NumberColumn("Buy", format="%d lb"),
-            "reason": st.column_config.TextColumn("Why (rule)", width="large"),
+            "name": t("col_product"),
+            "action": t("col_action"),
+            "suggested_price": st.column_config.NumberColumn(t("col_price_today"), format="L %d"),
+            "reorder_lbs": st.column_config.NumberColumn(t("col_buy"), format="%d lb"),
+            "reason": st.column_config.TextColumn(t("col_why"), width="large"),
         })
-    if st.button("Explain with AI"):
-        with st.spinner("Asking the model on AMD..."):
-            st.session_state.recs = copilot.recommendations(table)
+    if st.button(t("explain_btn")):
+        with st.spinner(t("asking")):
+            st.session_state.recs = copilot.recommendations(table, lang)
     if "recs" in st.session_state:
         recs = st.session_state.recs
         st.markdown(recs.text)
-        st.caption(f"Source: {recs.source}" + (f" · {recs.seconds:.1f} s" if recs.seconds else ""))
+        st.caption(t("source", s=i18n.source(recs.source, lang)) + (f" · {recs.seconds:.1f} s" if recs.seconds else ""))
         if recs.error:
-            st.warning(f"Model call failed, showing rule output instead: {recs.error}")
+            st.warning(t("rec_failed", e=recs.error))
 
     lots = table[table["action"] == "Mark down"]
     if not lots.empty:
-        st.subheader("Who to offer it to")
-        st.caption("Regular buyers ranked by code: buys this species 50 pts, usual order size against the pounds "
-                   "at risk 30, delivery zone 10, ordered in the last week 10. Buyers are fictional.")
+        st.subheader(t("who_title"))
+        st.caption(t("who_caption"))
         buyers = buyers_list(FILES_VERSION)
         for _, lot in lots.iterrows():
             pid = lot["product_id"]
             ranked = analytics.match_buyers(lot, buyers, settings)
-            st.markdown(f"**{lot['name']}**: {lot['at_risk_lbs']:g} lb at risk, today's price "
-                        f"L {lot['suggested_price']}/lb")
+            st.markdown(t("lot_line", name=lot["name"], lbs=f"{lot['at_risk_lbs']:g}", price=lot["suggested_price"]))
             st.dataframe(
-                ranked[["name", "type", "zone", "typical_lbs", "last_order_days_ago", "match", "offer_lbs"]],
+                ranked.assign(type=ranked["type"].map(lambda x: i18n.buyer_type(x, lang)))[
+                    ["name", "type", "zone", "typical_lbs", "last_order_days_ago", "match", "offer_lbs"]],
                 hide_index=True,
                 column_config={
-                    "name": "Buyer", "type": "Type", "zone": "Zone",
-                    "typical_lbs": st.column_config.NumberColumn("Usual order", format="%d lb"),
-                    "last_order_days_ago": st.column_config.NumberColumn("Last order", format="%d days ago"),
-                    "match": st.column_config.ProgressColumn("Match", min_value=0, max_value=100, format="%d"),
-                    "offer_lbs": st.column_config.NumberColumn("Offer", format="%d lb"),
+                    "name": t("col_buyer"), "type": t("col_type"), "zone": t("col_zone"),
+                    "typical_lbs": st.column_config.NumberColumn(t("col_usual"), format="%d lb"),
+                    "last_order_days_ago": st.column_config.NumberColumn(t("col_last"), format=t("days_ago")),
+                    "match": st.column_config.ProgressColumn(t("col_match"), min_value=0, max_value=100, format="%d"),
+                    "offer_lbs": st.column_config.NumberColumn(t("col_offer"), format="%d lb"),
                 })
-            if st.button("Draft flash-sale messages for these buyers", key=f"flash_{pid}"):
-                with st.spinner("Drafting on AMD..."):
+            if st.button(t("flash_btn"), key=f"flash_{pid}"):
+                with st.spinner(t("drafting")):
                     st.session_state.flash[pid] = copilot.flash_sale_messages(lot, ranked)
             if pid in st.session_state.flash:
                 msgs, res = st.session_state.flash[pid]
                 for _, b in ranked.iterrows():
                     if b["buyer_id"] in msgs:
-                        st.markdown(f"To **{b['name']}**")
+                        st.markdown(t("to_buyer", name=b["name"]))
                         st.code(msgs[b["buyer_id"]], language=None, wrap_lines=True)
-                st.caption(f"Source: {res.source}" + (f" · {res.seconds:.1f} s" if res.seconds else "")
-                           + ". Nothing is sent automatically: copy each message into WhatsApp.")
+                st.caption(t("source", s=i18n.source(res.source, lang))
+                           + (f" · {res.seconds:.1f} s" if res.seconds else "") + t("flash_caption"))
                 if res.error:
-                    st.warning(f"Model call failed, showing templates instead: {res.error}")
+                    st.warning(t("flash_failed", e=res.error))
 
 with metrics_box:
     drafted = len(st.session_state.log)
-    st.metric("Replies drafted", drafted)
-    st.metric("Estimated time saved", f"{drafted * max(manual_s - review_s, 0) / 60:.1f} min")
+    st.metric(t("replies_drafted"), drafted)
+    st.metric(t("est_time_saved"), f"{drafted * max(manual_s - review_s, 0) / 60:.1f} min")
 
-if llm.is_configured():
-    st.caption("Demo with synthetic data. Language model inference runs on AMD GPUs via AMD Token Factory.")
-else:
-    st.caption("Demo with synthetic data. AMD model not connected yet: showing offline templates.")
+st.caption(t("footer_on") if llm.is_configured() else t("footer_off"))

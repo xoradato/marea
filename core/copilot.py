@@ -1,7 +1,7 @@
 """Prompts for the model on AMD, with template fallbacks so the demo never breaks."""
 from dataclasses import dataclass
 
-from core import llm
+from core import i18n, llm
 
 REPLY_SYSTEM = """You draft replies for a small fish and seafood seller in Honduras who sells through WhatsApp and Facebook Marketplace.
 Rules:
@@ -16,7 +16,7 @@ Output only the reply and the translation."""
 REC_SYSTEM = """You help a small seafood seller in Honduras decide what to do today.
 The table was computed by deterministic code: avg_daily_lbs is a 14-day moving average of pounds sold per day, at_risk_lbs is stock minus expected sales before the lot loses freshness, and "action" comes from fixed rules.
 Do not compute new forecasts and do not invent numbers: only use numbers that appear in the table.
-Write 3 to 5 short bullet points in English, most urgent first. Each bullet names the product, the action, and the numbers that justify it.
+Write 3 to 5 short bullet points in {language}, most urgent first. Each bullet names the product, the action, and the numbers that justify it.
 End with one line on what to watch tomorrow."""
 
 REC_COLUMNS = ["name", "stock_lbs", "hours_left", "avg_daily_lbs", "trend_pct", "at_risk_lbs",
@@ -96,23 +96,25 @@ def _template_reply(check, table, source, error=None):
     return Result(es, en, False, source, None, error)
 
 
-def recommendations(table):
+def recommendations(table, lang="en"):
     if not llm.is_configured():
-        return _template_recs(table, "offline template (no AMD API key set)")
+        return _template_recs(table, "offline template (no AMD API key set)", lang)
     try:
         text, secs = llm.chat([
-            {"role": "system", "content": REC_SYSTEM},
+            {"role": "system", "content": REC_SYSTEM.format(language="Spanish" if lang == "es" else "English")},
             {"role": "user", "content": table[REC_COLUMNS].to_csv(index=False)},
         ], max_tokens=500, temperature=0.2)
     except llm.LLMError as e:
-        return _template_recs(table, "offline template (model call failed)", error=str(e))
+        return _template_recs(table, "offline template (model call failed)", lang, error=str(e))
     return Result(text, source=_source(), seconds=secs)
 
 
-def _template_recs(table, source, error=None):
+def _template_recs(table, source, lang="en", error=None):
     todo = table[table["action"] != "OK"]
-    text = "\n".join(f"- **{r['name']}: {r['action']}.** {r['reason']}" for _, r in todo.iterrows())
-    return Result(text or "- Nothing urgent today.", source=source, error=error)
+    text = "\n".join(f"- **{r['name']}: {i18n.action(r['action'], lang)}.** {r['reason']}"
+                     for _, r in todo.iterrows())
+    empty = "- Nada urgente hoy." if lang == "es" else "- Nothing urgent today."
+    return Result(text or empty, source=source, error=error)
 
 
 COUNTER_SYSTEM = """You draft a counter-offer for a small seafood seller in Honduras who sells on WhatsApp.

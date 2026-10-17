@@ -1,3 +1,5 @@
+<img src="assets/marea-mark.svg" width="72" alt="Marea logo">
+
 # Marea
 
 Sales copilot for small-scale fish and seafood sellers in Honduras who sell through WhatsApp and Facebook Marketplace.
@@ -13,6 +15,8 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 3. **What to do today.** Fixed rules choose the action (mark down, restock, discard). The model only explains the numbers. For each lot marked down, regular buyers are ranked with code and the model drafts a flash-sale WhatsApp message for each one. Nothing is sent automatically.
 
 When a buyer makes an offer, Marea compares three options in lempiras: accept, counter-offer, or reject and wait. The seller can draft the counter-offer, then confirm the order: stock drops everywhere in the app and a WhatsApp-ready receipt is generated.
+
+The interface switches between English and Spanish (sidebar). Messages to buyers, receipts and flash sales are always in Spanish.
 
 ## How the numbers are calculated (no LLM)
 

@@ -6,6 +6,8 @@ import re
 import unicodedata
 from dataclasses import dataclass, field
 
+from core import i18n
+
 NUM = r"(\d+(?:[.,]\d+)?)"
 NUMBER_WORDS = {
     "media": 0.5, "un": 1, "una": 1, "uno": 1, "dos": 2, "tres": 3, "cuatro": 4, "cinco": 5,
@@ -32,12 +34,10 @@ DELIVERY_WORDS = ("llev", "entreg", "envi", "domicilio", "mand", "trae", "traig"
 # Requests the seller must answer personally, even when price and stock are fine
 SPECIAL_REQUESTS = [
     ("PAY_LATER", ("fiado", "credito", "se lo pago", "se las pago", "se los pago", "le pago el",
-                   "pago despues", "quincena"), "Buyer wants to pay later."),
-    ("INVOICE", ("factura", "rtn"), "Buyer asks for an invoice (factura)."),
-    ("CUSTOM_PREP", ("filete", "escamad", "limpi", "sin tripa", "destripad"),
-     "Buyer asks for cleaning or filleting."),
-    ("FREEBIE", ("me regala", "regaleme", "gratis", "sin cobrar"),
-     "Buyer asks for something free (extra product or delivery)."),
+                   "pago despues", "quincena")),
+    ("INVOICE", ("factura", "rtn")),
+    ("CUSTOM_PREP", ("filete", "escamad", "limpi", "sin tripa", "destripad")),
+    ("FREEBIE", ("me regala", "regaleme", "gratis", "sin cobrar")),
 ]
 DISCOUNT_WORDS = ("lo menos", "rebaj", "descuento", "ultimo precio", "mas barato")
 FRESHNESS_BUFFER_H = 6  # the lot must still be fresh 6 h after delivery
@@ -88,7 +88,7 @@ class Check:
         return self.items[0].offer_per_lb if self.items else None
 
 
-def check_message(text, table, settings):
+def check_message(text, table, settings, lang="en"):
     t = normalize(text)
     rows = table.set_index("product_id")
     c = Check(text=t)
@@ -160,55 +160,56 @@ def check_message(text, table, settings):
     elif "manana" in t:
         c.when_h = 24
 
-    c.flags = _flags(c, rows, settings)
+    c.flags = _flags(c, rows, settings, lang)
     return c
 
 
-def _flags(c, rows, settings):
+def _flags(c, rows, settings, lang):
     flags = []
+
+    def add(code, text_key=None, **kw):
+        flags.append((code, i18n.flag(text_key or code, lang, **kw)))
+
     if not c.items:
-        flags.append(("UNKNOWN_PRODUCT", "No product from your catalog was recognized."))
+        add("UNKNOWN_PRODUCT")
     for it in c.items:
         r = rows.loc[it.pid]
+        name = r["name"]
         if it.pid in settings.get("closed_season", []):
-            flags.append(("CLOSED_SEASON", f"{r['name']} is marked by you as closed season."))
+            add("CLOSED_SEASON", name=name)
         if r["stock_lbs"] <= 0:
-            flags.append(("OUT_OF_STOCK", f"{r['name']} is out of stock."))
+            add("OUT_OF_STOCK", name=name)
         elif it.qty_lbs and it.qty_lbs > r["stock_lbs"]:
-            flags.append(("OVER_STOCK", f"Asks for {it.qty_lbs:g} lb of {r['name']}; you have {r['stock_lbs']:g} lb on ice."))
+            add("OVER_STOCK", name=name, qty=f"{it.qty_lbs:g}", stock=f"{r['stock_lbs']:g}")
         if c.when_h and r["stock_lbs"] > 0 and r["hours_left"] < c.when_h + FRESHNESS_BUFFER_H:
-            flags.append(("FRESHNESS", f"Delivery in ~{c.when_h} h, but this {r['name']} lot has "
-                                       f"{r['hours_left']:.0f} h of freshness left."))
+            add("FRESHNESS", name=name, when=c.when_h, hours=f"{r['hours_left']:.0f}")
         if it.offer_per_lb is not None:
+            prices = {"name": name, "offer": f"{it.offer_per_lb:g}", "floor": r["floor_price"], "list": r["list_price"]}
             if it.offer_per_lb < r["floor_price"]:
-                flags.append(("BELOW_FLOOR", f"{r['name']}: offer L {it.offer_per_lb:g}/lb is below your floor "
-                                             f"L {r['floor_price']}/lb (list L {r['list_price']})."))
+                add("BELOW_FLOOR", **prices)
             elif it.offer_per_lb < r["list_price"]:
-                flags.append(("COUNTER_OFFER", f"{r['name']}: offer L {it.offer_per_lb:g}/lb is between your floor "
-                                               "and list price. Accept or counter?"))
+                add("COUNTER_OFFER", **prices)
 
     if c.bundle_offer is not None:
         if all(it.qty_lbs for it in c.items):
-            floor_total = sum(it.qty_lbs * rows.loc[it.pid, "floor_price"] for it in c.items)
-            list_total = sum(it.qty_lbs * rows.loc[it.pid, "list_price"] for it in c.items)
-            if c.bundle_offer < floor_total:
-                flags.append(("BELOW_FLOOR", f"Offer L {c.bundle_offer:g} for the whole order is below your floor "
-                                             f"total L {floor_total:g} (list L {list_total:g})."))
-            elif c.bundle_offer < list_total:
-                flags.append(("COUNTER_OFFER", f"Offer L {c.bundle_offer:g} for the whole order is between your floor "
-                                               f"total L {floor_total:g} and list total L {list_total:g}."))
+            totals = {"offer": f"{c.bundle_offer:g}",
+                      "floor": f"{sum(it.qty_lbs * rows.loc[it.pid, 'floor_price'] for it in c.items):g}",
+                      "list": f"{sum(it.qty_lbs * rows.loc[it.pid, 'list_price'] for it in c.items):g}"}
+            if c.bundle_offer < float(totals["floor"]):
+                add("BELOW_FLOOR", "BELOW_FLOOR_ALL", **totals)
+            elif c.bundle_offer < float(totals["list"]):
+                add("COUNTER_OFFER", "COUNTER_OFFER_ALL", **totals)
         else:
-            flags.append(("BUNDLE_OFFER", f"Offers L {c.bundle_offer:g} for several products without saying how much of each."))
+            add("BUNDLE_OFFER", offer=f"{c.bundle_offer:g}")
 
     has_offer = c.bundle_offer is not None or any(it.offer_per_lb is not None for it in c.items)
     if not has_offer and any(w in c.text for w in DISCOUNT_WORDS):
-        flags.append(("DISCOUNT_ASK", "Buyer asks for a lower price without naming one."))
+        add("DISCOUNT_ASK")
 
-    for code, words, message in SPECIAL_REQUESTS:
+    for code, words in SPECIAL_REQUESTS:
         if any(w in c.text for w in words):
-            flags.append((code, message))
+            add(code)
 
     if c.delivery and c.zone is None:
-        zones = ", ".join(settings["delivery_zones"])
-        flags.append(("ZONE_UNKNOWN", f"Delivery requested to a place outside your zones ({zones})."))
+        add("ZONE_UNKNOWN", zones=", ".join(settings["delivery_zones"]))
     return flags
