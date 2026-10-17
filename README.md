@@ -39,7 +39,12 @@ Rules in `core/guard.py`, not the LLM, raise it when a message has: an offer bel
 
 ## Where AMD runs
 
-All language model calls (reply drafts and explanations) go to a model served on AMD GPUs through AMD Token Factory. See `core/llm.py`. Model: _TBD_.
+All language model calls (reply drafts, counter-offers, flash-sale messages and explanations) go to **DeepSeek-V4-Flash**, served on AMD GPUs by AMD Token Factory (AMD Radeon Cloud), through its OpenAI-compatible endpoint `https://developer.amd.com.cn/radeon/api/v1/chat/completions`. See `core/llm.py`.
+
+- The model only writes text. Prices, quantities, flags and actions are computed in pandas and passed to it.
+- DeepSeek-V4-Flash does not "think" by default, so each reply is short and cheap against the team's daily usage cap.
+- Rate limits are shared per team key. `core/llm.py` retries only 429 and 502/503 responses, with short backoff; if the model is slow, rate limited or down, the app falls back to its offline templates and says so.
+- Token Factory keeps prompts and outputs for about 2 days. All data sent is synthetic.
 
 ## Data
 
