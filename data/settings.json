@@ -18,6 +18,15 @@
   },
   "delivery_hours": "Monday to Saturday, 7:00-17:00",
   "min_order_lbs": 3,
+  "prep_fees": {
+    "whole": 0,
+    "cleaned": 10,
+    "fillet": 25
+  },
+  "daily_overhead": {
+    "ice": 300,
+    "fuel": 200
+  },
   "closed_season": [],
   "as_of": "2026-10-17T09:00"
 }

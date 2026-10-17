@@ -147,6 +147,15 @@ TEXT = {
                         "Pedido confirmado. El stock, el panel y las acciones de hoy ya están actualizados."),
     "receipt_caption": ("WhatsApp receipt: copy it with the button in the corner.",
                         "Recibo para WhatsApp: cópielo con el botón de la esquina."),
+    "open_whatsapp": ("Open in WhatsApp", "Abrir en WhatsApp"),
+    "prep": ("Preparation", "Preparación"),
+    "prep_whole": ("Whole", "Entero"),
+    "prep_cleaned": ("Cleaned and scaled (+L {fee}/lb)", "Limpio y escamado (+L {fee}/lb)"),
+    "prep_fillet": ("Filleted (+L {fee}/lb)", "Fileteado (+L {fee}/lb)"),
+    "prep_note": ("Weighed whole, before cleaning.", "Se pesa entero, antes de limpiar."),
+    "payment": ("Payment", "Pago"),
+    "pay_cash": ("Cash on delivery", "Efectivo al recibir"),
+    "pay_transfer": ("Bank transfer before dispatch", "Transferencia antes del despacho"),
     "log_title": ("Messages handled this session", "Mensajes atendidos en esta sesión"),
     "log_message": ("Message", "Mensaje"),
     "log_reasons": ("Reasons", "Motivos"),
@@ -161,6 +170,17 @@ TEXT = {
                         "said would spoil, at the price you sold them.",
                         "Se actualiza mientras usa Marea. \"Vendido de lotes en riesgo\" cuenta las libras que el "
                         "pronóstico daba por perdidas, al precio al que las vendió."),
+    "cava_title": ("Break-even today (\"librar la cava\")", "Librar la cava (punto de equilibrio de hoy)"),
+    "cava_progress": ("L {sold} of L {capital} recovered ({pct})", "L {sold} de L {capital} recuperados ({pct})"),
+    "cava_missing": ("**L {missing}** still to sell to recover today's money: fish on ice at cost L {fish} "
+                     "+ ice L {ice} + fuel L {fuel}.",
+                     "Faltan **L {missing}** por vender para recuperar lo invertido hoy: pescado en hielo a costo "
+                     "L {fish} + hielo L {ice} + combustible L {fuel}."),
+    "cava_done": ("Today's money is back (fish at cost L {fish} + ice L {ice} + fuel L {fuel}). From here, every "
+                  "pound you sell is profit, so lots at risk can go at the walk-away price.",
+                  "Ya recuperó lo invertido hoy (pescado a costo L {fish} + hielo L {ice} + combustible L {fuel}). "
+                  "Desde aquí cada libra vendida es ganancia, así que los lotes en riesgo pueden salir al precio "
+                  "para retirarse."),
     "revenue_30d": ("Revenue, last 30 days", "Ventas, últimos 30 días"),
     "gross_margin": ("Gross margin ({m})", "Margen bruto ({m})"),
     "at_risk": ("At risk of spoiling (L {v} at cost)", "En riesgo de perderse (L {v} a costo)"),

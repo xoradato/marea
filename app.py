@@ -1,6 +1,7 @@
 """Marea: sales copilot for small-scale fish sellers. Run: streamlit run app.py"""
 import importlib
 import os
+from urllib.parse import quote
 
 import pandas as pd
 import streamlit as st
@@ -62,15 +63,29 @@ def parser_benchmark(version):
     return pd.DataFrame(benchmark.run(base, settings))
 
 
+PREP_ES = {"cleaned": "Limpieza y escamado", "fillet": "Fileteado"}
+PAY_ES = {"cash": "Pago: efectivo al recibir.",
+          "transfer": "Pago: transferencia antes del despacho. Envíe la captura y despachamos."}
+
+
+def wa_link(text):
+    """WhatsApp opens with the text ready and the seller picks the chat."""
+    return "https://wa.me/?text=" + quote(text)
+
+
 def receipt_text(order, business):
     """Always in Spanish: it goes to the buyer."""
     lines = [f"*{business}* · Nota de pedido #{order['n']}", i18n.stamp(order["time"], "es"), ""]
     lines += [f"- {ln['lbs']:g} lb {ln['product']} × L {ln['price']:g} = L {ln['lbs'] * ln['price']:,.0f}"
               for ln in order["lines"]]
+    if order["prep_total"]:
+        lbs = sum(ln["lbs"] for ln in order["lines"])
+        lines.append(f"{PREP_ES[order['prep']]}: {lbs:g} lb × L {order['prep_fee']} = L {order['prep_total']:,.0f} "
+                     "(se pesa entero, antes de limpiar)")
     if order["fee"]:
         lines.append(f"Envío a {order['zone']}: L {order['fee']}")
     lines += [f"*Total: L {order['revenue'] + (order['fee'] or 0):,.0f}*",
-              f"Entrega: {order['when'] or 'por confirmar'}", "", "¡Gracias por su compra!"]
+              f"Entrega: {order['when'] or 'por confirmar'}", PAY_ES[order["payment"]], "", "¡Gracias por su compra!"]
     return "\n".join(lines)
 
 
@@ -230,7 +245,8 @@ with tab_reply:
                 draft = hold if mode == "hold" else st.session_state.replies[cache_key]
             else:
                 draft = hold
-            st.text_area(t("reply_label"), draft.text, height=130)
+            reply_text = st.text_area(t("reply_label"), draft.text, height=130)
+            st.link_button(t("open_whatsapp"), wa_link(reply_text), icon=":material/send:")
             if draft.english and lang == "en":
                 st.caption(f"EN: {draft.english}")
             st.caption(t("source", s=i18n.source(draft.source, lang))
@@ -292,6 +308,17 @@ with tab_reply:
                     "price_per_lb": st.column_config.NumberColumn(t("cart_price"), min_value=0, format="L %d"),
                 })
             st.caption(t("cart_caption"))
+            fees = settings["prep_fees"]
+            prep_labels = {"whole": t("prep_whole"), "cleaned": t("prep_cleaned", fee=fees["cleaned"]),
+                           "fillet": t("prep_fillet", fee=fees["fillet"])}
+            p1, p2 = st.columns(2)
+            prep = p1.radio(t("prep"), list(prep_labels), format_func=prep_labels.get,
+                            key=f"prep_{abs(hash(active))}")
+            if prep != "whole":
+                p1.caption(t("prep_note"))
+            pay_labels = {"cash": t("pay_cash"), "transfer": t("pay_transfer")}
+            payment = p2.radio(t("payment"), list(pay_labels), format_func=pay_labels.get,
+                               key=f"pay_{abs(hash(active))}")
             if st.button(t("confirm_btn"), type="primary"):
                 ids = {v: k for k, v in names.items()}
                 cart = cart.dropna(subset=["product"])
@@ -310,12 +337,14 @@ with tab_reply:
                         # pounds the forecast said would spoil, sold instead
                         rescued += min(float(r["lbs"]), rows.loc[pid, "at_risk_lbs"]) * float(r["price_per_lb"])
                     today = any(code == "FRESHNESS" for code, _ in check.flags)
+                    prep_total = float(cart["lbs"].sum() * fees[prep])
                     order = {
                         "n": len(st.session_state.orders) + 1,
                         "time": as_of + pd.Timedelta(hours=hours_ahead),
                         "lines": [{"product": r["product"], "lbs": float(r["lbs"]), "price": float(r["price_per_lb"])}
                                   for _, r in cart.iterrows()],
-                        "revenue": float((cart["lbs"] * cart["price_per_lb"]).sum()),
+                        "prep": prep, "prep_fee": fees[prep], "prep_total": prep_total, "payment": payment,
+                        "revenue": float((cart["lbs"] * cart["price_per_lb"]).sum()) + prep_total,
                         "cost": float(sum(r["lbs"] * rows.loc[ids[r["product"]], "unit_cost"]
                                           for _, r in cart.iterrows())),
                         "rescued": rescued,
@@ -329,6 +358,7 @@ with tab_reply:
         if st.session_state.get("receipt"):
             st.success(t("order_confirmed"))
             st.code(st.session_state.receipt, language=None, wrap_lines=True)
+            st.link_button(t("open_whatsapp"), wa_link(st.session_state.receipt), icon=":material/send:")
             st.caption(t("receipt_caption"))
 
     if st.session_state.log:
@@ -348,6 +378,20 @@ with tab_dash:
     o[2].metric(t("rescued"), f"L {sum(x['rescued'] for x in orders):,.0f}")
     o[3].metric(t("flagged"), sum(1 for x in st.session_state.log if x["decide_tu"]))
     st.caption(t("session_caption"))
+
+    st.subheader(t("cava_title"))
+    fish = float((e["stock_lbs"] * e["unit_cost"]).sum())  # fish on ice this morning, at cost
+    over = settings["daily_overhead"]
+    capital = fish + over["ice"] + over["fuel"]
+    sold_today = sum(x["revenue"] for x in orders)
+    parts = {"fish": f"{fish:,.0f}", "ice": over["ice"], "fuel": over["fuel"]}
+    st.progress(min(sold_today / capital, 1.0),
+                text=t("cava_progress", sold=f"{sold_today:,.0f}", capital=f"{capital:,.0f}",
+                       pct=f"{sold_today / capital:.0%}"))
+    if sold_today < capital:
+        st.markdown(t("cava_missing", missing=f"{capital - sold_today:,.0f}", **parts))
+    else:
+        st.markdown(t("cava_done", **parts))
 
     revenue = table["revenue_30d"].sum()
     margin = table["margin_30d"].sum()
@@ -429,6 +473,7 @@ with tab_recs:
                     if b["buyer_id"] in msgs:
                         st.markdown(t("to_buyer", name=b["name"]))
                         st.code(msgs[b["buyer_id"]], language=None, wrap_lines=True)
+                        st.link_button(t("open_whatsapp"), wa_link(msgs[b["buyer_id"]]), icon=":material/send:")
                 st.caption(t("source", s=i18n.source(res.source, lang))
                            + (f" · {res.seconds:.1f} s" if res.seconds else "") + t("flash_caption"))
                 if res.error:

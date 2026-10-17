@@ -14,7 +14,7 @@ Sales copilot for small-scale fish and seafood sellers in Honduras who sell thro
 2. **Dashboard.** Revenue, margin, stock at risk of spoiling (in pounds and lempiras at cost), and days of cover, computed with pandas. A time slider simulates the next 36 hours: stock sells at the 14-day average and lots age, so you can see when markdowns start and when a lot must be discarded.
 3. **What to do today.** Fixed rules choose the action (mark down, restock, discard). The model only explains the numbers. For each lot marked down, regular buyers are ranked with code and the model drafts a flash-sale WhatsApp message for each one. Nothing is sent automatically.
 
-When a buyer makes an offer, Marea compares three options in lempiras: accept, counter-offer, or reject and wait. The seller can draft the counter-offer, then confirm the order: stock drops everywhere in the app and a WhatsApp-ready receipt is generated.
+When a buyer makes an offer, Marea compares three options in lempiras: accept, counter-offer, or reject and wait. The seller picks one, edits the draft and opens it in WhatsApp with one click. Confirming the order records preparation (whole, cleaned, filleted; weighed whole) and payment (cash on delivery or transfer before dispatch), drops the stock everywhere in the app and generates a WhatsApp-ready receipt. The dashboard tracks the day's break-even (librar la cava): fish on ice at cost plus ice and fuel, against what has been sold.
 
 The interface switches between English and Spanish (sidebar). Messages to buyers, receipts and flash sales are always in Spanish.
 

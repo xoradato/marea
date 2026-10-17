@@ -61,6 +61,10 @@ SETTINGS = {
     "zone_aliases": {"La Ceiba": ["Barrio La Isla", "Barrio Inglés", "Mazapán", "Zona Viva"]},
     "delivery_hours": "Monday to Saturday, 7:00-17:00",
     "min_order_lbs": 3,
+    # Extra charge per pound for preparing the fish (weighed whole, before cleaning)
+    "prep_fees": {"whole": 0, "cleaned": 10, "fillet": 25},
+    # What the seller spends every day besides the fish
+    "daily_overhead": {"ice": 300, "fuel": 200},
     "closed_season": [],
     "as_of": AS_OF.isoformat(timespec="minutes"),
 }
