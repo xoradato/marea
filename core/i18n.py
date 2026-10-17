@@ -406,6 +406,7 @@ SOURCES = [  # technical source captions from the copilot, in English, with thei
      "plantilla sin conexión (el modelo escribió un precio que no está en el catálogo)"),
     ("(some messages from template)", "(algunos mensajes de plantilla)"),
     (" on AMD Token Factory", " en AMD Token Factory"),
+    ("today's menu, built by code", "menú del día, armado por el código"),
     ("template", "plantilla"),
 ]
 

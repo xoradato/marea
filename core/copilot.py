@@ -80,10 +80,17 @@ def blocking(flags):
     return [(code, msg) for code, msg in flags if code not in INFO_FLAGS]
 
 
+MENU_SOURCE = "today's menu, built by code"
+
+
 def draft_reply(message, check, table, settings, lang="en"):
     flags = "\n".join(f"- {m}" for _, m in blocking(check.flags)) or "none"
     user = (f"SELLER DATA:\n{_seller_facts(check, table, settings)}\n\n"
             f"FLAGS:\n{flags}\n\nBUYER MESSAGE:\n{message}")
+    if not check.product_ids:
+        # No catalog product, even after Gemma read it: today's catch and prices, from code, instantly.
+        # (In live tests the model sometimes answered "let me check" instead, which loses the buyer.)
+        return _template_reply(check, table, MENU_SOURCE)
     if not llm.is_configured():
         return _template_reply(check, table, "offline template (no AMD API key set)")
     try:
