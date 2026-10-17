@@ -242,7 +242,7 @@ TEXT = {
                   "para retirarse."),
     "revenue_30d": ("Revenue, last 30 days", "Ventas, últimos 30 días"),
     "gross_margin": ("Gross margin ({m})", "Margen bruto ({m})"),
-    "at_risk": ("At risk of spoiling (L {v} at cost)", "En riesgo de perderse (L {v} a costo)"),
+    "at_risk": ("At risk (L {v} at cost)", "En riesgo (L {v} a costo)"),
     "need_action": ("Products needing action", "Productos que requieren acción"),
     "daily_rev": ("Daily revenue, last 30 days", "Ventas diarias, últimos 30 días"),
     "revenue_series": ("Revenue (L)", "Ventas (L)"),
