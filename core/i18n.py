@@ -9,6 +9,9 @@ TEXT = {
     # Sidebar
     "language": ("Language", "Idioma"),
     "controls": ("Controls", "Controles"),
+    "night_hint": ("Night mode: menu ⋮ (top right) → Settings → Dark. It also follows your phone's setting.",
+                   "Modo noche: menú ⋮ (arriba a la derecha) → Settings → Dark. También sigue el ajuste de su "
+                   "teléfono."),
     "sim_slider": ("Simulate time: hours from now", "Simular tiempo: horas desde ahora"),
     "sim_help": ("Stock sells at the 14-day average and every lot ages. No restocking.",
                  "El stock se vende al promedio de 14 días y cada lote envejece. Sin reabastecer."),

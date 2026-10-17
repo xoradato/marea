@@ -113,6 +113,7 @@ for name, empty in (("log", []), ("sold", {}), ("orders", []), ("flash", {})):
 with st.sidebar:
     lang = st.radio("Language / Idioma", list(i18n.LANGS), format_func=i18n.LANGS.get,
                     horizontal=True, key="lang")
+    st.caption(":material/dark_mode: " + i18n.t("night_hint", lang))
 
 
 def t(key, **kw):
