@@ -1,10 +1,19 @@
 """Marea: sales copilot for small-scale fish sellers. Run: streamlit run app.py"""
+import importlib
 import os
 
 import pandas as pd
 import streamlit as st
 
 from core import analytics, benchmark, copilot, guard, i18n, llm, ui
+
+# Streamlit Cloud can keep an old copy of a changed module after a redeploy. Reload any module whose
+# file changed since it was loaded (dependencies first, so later modules see the new versions).
+for _module in (i18n, llm, guard, analytics, copilot, benchmark, ui):
+    _mtime = os.path.getmtime(_module.__file__)
+    if getattr(_module, "_loaded_mtime", None) != _mtime:
+        importlib.reload(_module)
+        _module._loaded_mtime = _mtime
 
 st.set_page_config(page_title="Marea", page_icon=":material/waves:", layout="wide")
 ui.inject_css()
