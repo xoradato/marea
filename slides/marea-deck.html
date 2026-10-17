@@ -353,7 +353,7 @@ body.editing [contenteditable="true"] { outline: 1px dashed rgba(143, 211, 201, 
             <div class="step reveal" style="--d:.2s">
                 <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M10 14h44a4 4 0 0 1 4 4v24a4 4 0 0 1-4 4H26l-12 10V46h-4a4 4 0 0 1-4-4V18a4 4 0 0 1 4-4z"/><path d="M18 26h28M18 34h18"/></svg>
                 <span class="accent">Read</span>
-                <p>Rules in code pull product, pounds, offer, zone and day out of the buyer's message.</p>
+                <p>Rules in code read product, pounds, offer, zone and day. Gemma on AMD reads what the rules cannot.</p>
             </div>
             <div class="step reveal" style="--d:.35s">
                 <svg viewBox="0 0 64 64" aria-hidden="true"><path d="M32 8v48M14 20h36"/><path d="M14 20 6 38a9 9 0 0 0 16 0zM50 20l-8 18a9 9 0 0 0 16 0z"/><path d="M22 56h20"/></svg>
@@ -374,16 +374,16 @@ body.editing [contenteditable="true"] { outline: 1px dashed rgba(143, 211, 201, 
         <div class="abs flow">
             <div class="node reveal" style="--d:.05s"><span class="mono">In</span><h3>Buyer message</h3><p>WhatsApp or Marketplace, pasted as written.</p></div>
             <div class="arrow reveal" style="--d:.1s">→</div>
-            <div class="node reveal" style="--d:.15s"><span class="mono">Rules in code</span><h3>Read it</h3><p>Product, pounds, offer, zone, day. Flags DECIDE TÚ.</p></div>
+            <div class="node amd reveal" style="--d:.15s"><span class="mono">Rules + Gemma</span><h3>Read it</h3><p>Rules first; Gemma on AMD reads the rest. Code checks every number.</p></div>
             <div class="arrow reveal" style="--d:.2s">→</div>
             <div class="node reveal" style="--d:.25s"><span class="mono">pandas</span><h3>Do the math</h3><p>14-day forecast, freshness, sell now or wait.</p></div>
             <div class="arrow reveal" style="--d:.3s">→</div>
-            <div class="node amd reveal" style="--d:.35s"><span class="mono">AMD Token Factory</span><h3>Gemma on AMD GPUs</h3><p>Writes the reply. Only the words.</p></div>
+            <div class="node amd reveal" style="--d:.35s"><span class="mono">AMD Token Factory</span><h3>Gemma on AMD GPUs</h3><p>Writes the reply, the counter-offer and the daily post.</p></div>
             <div class="arrow reveal" style="--d:.4s">→</div>
             <div class="node reveal" style="--d:.45s"><span class="mono">Out</span><h3>Seller decides</h3><p>Reply, order and receipt, one click each.</p></div>
         </div>
         <p class="abs accent rule-line reveal" style="--d:.6s">The model never sets a price.</p>
-        <p class="abs rule-note reveal" style="--d:.75s">Code checks every price the model writes. If one is not in the catalog, Marea falls back to a template and says so.</p>
+        <p class="abs rule-note reveal" style="--d:.75s">Code keeps only numbers the buyer actually wrote, and checks every price the model writes. If one is not in the catalog, Marea falls back to a template and says so.</p>
     </section>
 
     <!-- === 6. THE MATH === -->
@@ -416,7 +416,7 @@ body.editing [contenteditable="true"] { outline: 1px dashed rgba(143, 211, 201, 
         <div class="chrome"><span>Proof</span><span>07 / 09</span></div>
         <div class="abs proof">
             <div class="cell reveal" style="--d:.05s"><div class="num">30<small>/30</small></div><p>synthetic buyer messages read correctly: typos, "lps", numbers in words, several products.</p></div>
-            <div class="cell reveal" style="--d:.15s"><div class="num">4<small>/4</small></div><p>tests on the sell-now-or-wait math.</p></div>
+            <div class="cell reveal" style="--d:.15s"><div class="num">10<small>/10</small></div><p>hard messages read by Gemma on AMD and checked by code. Rules alone: 0/10.</p></div>
             <div class="cell reveal" style="--d:.25s"><div class="num">L 3,110</div><p>cash today when five buyers want the same shrimp, vs. L 1,590 answering in order.</p></div>
             <div class="cell reveal" style="--d:.35s"><div class="num">MIT</div><p>open-source repo and a live app anyone can try.</p></div>
         </div>
@@ -438,7 +438,7 @@ body.editing [contenteditable="true"] { outline: 1px dashed rgba(143, 211, 201, 
         <div class="chrome"><span>Marea · La Ceiba, Honduras</span><span>09 / 09</span></div>
         <h2 class="abs display cover-title reveal" style="top:300px">Marea</h2>
         <p class="abs accent cover-tag reveal" style="--d:.2s; top:636px">Sell before it spoils.</p>
-        <div class="abs built reveal" style="--d:.4s"><b>Built on AMD</b>Gemma-4-31B-IT on AMD GPUs through AMD Token Factory. Rules and math in Python and pandas.</div>
+        <div class="abs built reveal" style="--d:.4s"><b>Built on AMD</b>Gemma-4-31B-IT on AMD GPUs through AMD Token Factory reads what the rules cannot and writes every reply. Rules and math in Python and pandas.</div>
         <div class="abs links reveal" style="--d:.55s"><span>marea-copilot.streamlit.app</span><span>github.com/xoradato/marea</span></div>
     </section>
 

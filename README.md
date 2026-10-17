@@ -5,7 +5,7 @@
 <br>
 
 **A sales copilot for small-scale fish sellers in Honduras who sell on WhatsApp and Facebook Marketplace.**<br>
-Rules in code read every buyer message, pandas does every calculation, and Gemma on AMD GPUs writes the replies.<br>
+Rules in code read every buyer message, Gemma on AMD GPUs reads the ones the rules cannot, pandas does every calculation, and Gemma writes the replies.<br>
 The seller always decides.
 
 <br>
@@ -19,6 +19,8 @@ The seller always decides.
 ![Streamlit](https://img.shields.io/badge/Streamlit-app-FF4B4B?style=flat-square&logo=streamlit&logoColor=white)
 ![pandas](https://img.shields.io/badge/pandas-math-150458?style=flat-square&logo=pandas&logoColor=white)
 ![Parser](https://img.shields.io/badge/parser_tests-30%2F30-1B998B?style=flat-square)
+![Gemma reads](https://img.shields.io/badge/Gemma_reads_hard_messages-10%2F10-1B998B?style=flat-square)
+![Docker](https://img.shields.io/badge/Docker-ready-2496ED?style=flat-square&logo=docker&logoColor=white)
 [![License: MIT](https://img.shields.io/badge/License-MIT-8FD3C9?style=flat-square)](LICENSE)
 
 <sub>AMD Developer Hackathon · ACT III · Reinvent Commerce track · All data in this repo is synthetic</sub>
@@ -53,7 +55,7 @@ L 70 a pound is below the seller's floor. But the shrimp has 18 hours of freshne
 
 ### 1 · Reply to a buyer, with DECIDE TÚ
 
-Paste a buyer message. Rules in code read each product, pounds, offer, zone and day, including multi-product orders and "L 1,100 for everything" offers. If a rule triggers, the seller sees **DECIDE TÚ** with the reasons, and three options priced in lempiras: hold, counter-offer or accept. The reply is drafted by Gemma on AMD and opens in WhatsApp with one click. Confirming the order updates stock everywhere and writes a WhatsApp-ready receipt.
+Paste a buyer message. Rules in code read each product, pounds, offer, zone and day, including multi-product orders and "L 1,100 for everything" offers. When the rules find no catalog product (slang like "camaroncitos", typos like "kmaron", a hotel writing "red snapper" in English), **Gemma on AMD reads the message** into JSON and code keeps only what it can verify: every number must be written in the message and the zone must be one the seller serves. If a rule triggers, the seller sees **DECIDE TÚ** with the reasons, and three options priced in lempiras: hold, counter-offer or accept. The reply is drafted by Gemma on AMD and opens in WhatsApp with one click. Confirming the order updates stock everywhere and writes a WhatsApp-ready receipt.
 
 <img src="assets/readme/reply.png" alt="DECIDE TÚ panel, decision options with lempiras, reply drafted by Gemma on AMD, and the sell-now-or-wait comparison" width="100%">
 
@@ -93,14 +95,16 @@ Fixed rules choose the action for each lot: mark down, restock or discard. For e
 ```mermaid
 flowchart LR
     A["<b>Buyer message</b><br/>WhatsApp · Marketplace"] --> B["<b>Rules in code</b><br/>product, pounds, offer,<br/>zone, day → DECIDE TÚ"]
+    B -- "no product found" --> R["<b>Gemma on AMD reads it</b><br/>JSON, then code checks<br/>every number and zone"]
+    R --> C
     B --> C["<b>pandas engine</b><br/>14-day forecast, freshness,<br/>sell now or wait"]
-    C --> D["<b>Gemma on AMD GPUs</b><br/>AMD Token Factory<br/>writes the words only"]
+    C --> D["<b>Gemma on AMD writes</b><br/>reply, counter-offer,<br/>flash sale, daily post"]
     D --> E["<b>Seller decides</b><br/>reply · order · receipt"]
     D -. "price not in catalog" .-> F["<b>Template fallback</b>"]
     classDef code fill:#0B3C5D,stroke:#8FD3C9,color:#E8F4F1
     classDef amd fill:#0C6E7A,stroke:#8FD3C9,color:#FFFFFF
     class A,B,C,E,F code
-    class D amd
+    class D,R amd
 ```
 
 > **The model never sets a price.** Prices, quantities, flags and actions come from code and are passed to the model as facts. Code then checks every price the model writes; if one is not in the catalog, Marea uses a template and says so.
@@ -115,6 +119,7 @@ flowchart LR
 | **Provider** | AMD Token Factory (AMD Radeon Cloud), OpenAI-compatible endpoint |
 | **Endpoint** | `https://developer.amd.com.cn/radeon/api/v1/chat/completions` |
 | **Client** | [`core/llm.py`](core/llm.py) · `requests`, 30 s timeout, retries only 429 and 502/503 with short backoff |
+| **The model reads** | buyer messages the rules cannot read, into JSON (`response_format: json_object`); code drops any number not written in the message and any zone the seller does not serve |
 | **The model writes** | reply drafts, counter-offers, acceptances, flash-sale messages, the daily post, plain-language explanations |
 | **The model never** | sets a price, picks an action, or sends anything |
 | **If AMD is slow or down** | the app falls back to offline templates and labels the source on screen |
@@ -157,8 +162,10 @@ Rules in [`core/guard.py`](core/guard.py), not the LLM, raise it when a message 
 | Parser on 30 synthetic messages in Honduran WhatsApp style: typos, "lps", numbers in words, totals vs. per-pound offers, sarcasm, several products, a buyer who changes their mind | **30/30** | `python tests/test_guard.py` |
 | Sell-now-or-wait math | **4/4** | `python tests/test_offer.py` |
 | Several-buyers ranking (L 3,110 vs. L 1,590) | **1/1** | `python tests/test_queue.py` |
+| Code checks on what the model extracts: invented numbers and zones dropped, totals per pound, junk JSON | **4/4** | `python tests/test_extract.py` |
+| 10 messages the rules cannot read (slang, diminutives, typos, English fish names): rules alone vs. rules + Gemma on AMD | **0/10 → 10/10** | in the app: **Your catalog → Gemma test** (10 live calls) |
 
-The test messages and labels were drafted with an LLM's help and reviewed by hand; they are not real conversations. The same benchmark runs inside the app under **Your catalog**.
+The test messages and labels were drafted with an LLM's help and reviewed by hand; they are not real conversations. The 10/10 was measured on the live app with Gemma-4-31B-IT on AMD Token Factory on Oct 17, 2026; a model run can vary, and the test is there so anyone can run it again.
 
 <img src="assets/readme/divider.svg" width="100%" alt="">
 
@@ -173,6 +180,13 @@ set -a; source .env; set +a
 streamlit run app.py
 ```
 
+Or with Docker (the key is passed at run time, never built into the image):
+
+```bash
+docker build -t marea .
+docker run -p 8501:8501 --env-file .env marea
+```
+
 Without a key the app runs on offline templates, so the rules, the math and the dashboard can still be tested. On Streamlit Cloud, put `AMD_API_BASE`, `AMD_API_KEY` and `AMD_MODEL` in **App settings → Secrets**. Never commit keys.
 
 <img src="assets/readme/divider.svg" width="100%" alt="">
@@ -183,18 +197,19 @@ Without a key the app runs on offline templates, so the rules, the math and the 
 marea/
 ├── app.py                 Streamlit UI: five tabs, sidebar, header
 ├── core/
-│   ├── guard.py           rule-based parser and DECIDE TÚ flags
+│   ├── guard.py           rule-based parser, DECIDE TÚ flags, checks on what the model extracts
 │   ├── analytics.py       pandas engine: forecast, risk, actions, sell now or wait
 │   ├── buyer_queue.py     several buyers, one lot: ranking and allocation
-│   ├── copilot.py         prompts for the model + template fallbacks + price check
+│   ├── copilot.py         prompts for the model (read and write) + template fallbacks + price check
 │   ├── llm.py             AMD Token Factory client
-│   ├── benchmark.py       parser benchmark shown in the app
+│   ├── benchmark.py       parser and Gemma benchmarks shown in the app
 │   ├── i18n.py            English / Spanish text
 │   └── ui.py              header, panels, CSS
 ├── data/                  synthetic seller, catalog, sales, buyers (generate_data.py)
-├── tests/                 parser, offer and queue tests + labeled messages
+├── tests/                 parser, offer, queue and extraction tests + labeled messages
 ├── slides/                pitch deck (HTML with animations, PDF) and cover
-└── assets/                logo, turtle icon, README images
+├── assets/                logo, turtle icon, README images
+└── Dockerfile             container for the app (key passed at run time)
 ```
 
 <img src="assets/readme/divider.svg" width="100%" alt="">
