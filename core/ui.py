@@ -61,7 +61,8 @@ CSS = f"""
   border-radius: 16px; padding: 2px 24px 18px; gap: 0.35rem;
 }}
 .st-key-hero h1 {{ color: #FFFFFF; font-weight: 800; font-size: 1.9rem; letter-spacing: -0.02em; padding-bottom: 0.2rem; }}
-.st-key-hero p {{ color: #D5EAE7; margin: 0; max-width: 60ch; }}
+.st-key-hero p {{ color: #D5EAE7; max-width: 60ch; }}
+.st-key-hero p.marea-tagline {{ margin: 0 0 12px; }}
 .marea-pills {{ display: flex; flex-wrap: wrap; gap: 8px; max-width: 70%; }}
 .marea-pill {{
   display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px; border-radius: 999px;
@@ -100,8 +101,9 @@ def header(box, pills, lang="en"):
         for dot, text in pills)
     with box.container(key="hero"):
         st.title(":material/waves: Marea", anchor=False)
-        st.markdown(t("tagline", lang))
-        st.markdown(f'<div class="marea-pills">{spans}</div>', unsafe_allow_html=True)
+        # Tagline and pills in one block, so Streamlit's spacing between blocks cannot overlap them
+        st.markdown(f'<p class="marea-tagline">{escape(t("tagline", lang))}</p>'
+                    f'<div class="marea-pills">{spans}</div>', unsafe_allow_html=True)
 
 
 def decide_card(reasons, lang="en"):
