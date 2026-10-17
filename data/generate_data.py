@@ -53,7 +53,7 @@ BUYERS = [
 WEEKDAY_FACTOR = [0.8, 0.85, 0.9, 1.0, 1.25, 1.35, 1.15]  # Mon..Sun
 
 SETTINGS = {
-    "business_name": "Mariscos La Ola (fictional)",
+    "business_name": "Mariscos La Ola",
     "home_base": "La Ceiba",
     "tone": "Warm and brief Honduran Spanish, uses 'usted', at most 3 sentences, at most one emoji.",
     "delivery_zones": {"La Ceiba": 0, "Sambo Creek": 60, "Jutiapa": 80, "Tela": 150},

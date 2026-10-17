@@ -112,7 +112,7 @@ with st.sidebar:
     st.caption(t("demo_clock", t=i18n.stamp(as_of + pd.Timedelta(hours=hours_ahead), lang))
                + (t("simulated") if hours_ahead else ""))
     settings["closed_season"] = st.multiselect(t("closed_season"), list(names), format_func=names.get,
-                                               key="closed")
+                                               placeholder=t("choose_products"), key="closed")
     st.divider()
     st.subheader(":material/timer: " + t("time_saved"))
     manual_s = st.number_input(t("manual_s"), 10, 600, 90, key="manual_s")
