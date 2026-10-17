@@ -4,7 +4,7 @@ Token Factory exposes an OpenAI-compatible endpoint: POST {AMD_API_BASE}/chat/co
 Bearer key. Base URL, key and model name come from environment variables; nothing is hard-coded.
 Values used for the demo (from the Token Factory documentation):
     AMD_API_BASE=https://developer.amd.com.cn/radeon/api/v1
-    AMD_MODEL=DeepSeek-V4-Flash      (does not "think" by default, cheapest in the catalog)
+    AMD_MODEL=Gemma-4-31B-IT         (instruction-tuned, no "thinking" by default; system message first)
 
 The team key is shared and rate limited (per-minute, concurrency and a daily spend cap), so only
 429 and 502/503 responses are retried, with short exponential backoff and jitter. A long wait is

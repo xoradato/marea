@@ -80,8 +80,13 @@ CSS = f"""
 .st-key-info [data-testid="stIconMaterial"] {{ color: #3D7BB0; }}
 /* Spacing rhythm (8 px grid): 16 between related items, 24-32 between groups */
 .st-key-hero {{ margin-bottom: 8px; }}
-[data-baseweb="tab-list"] {{ gap: 28px; }}
-[data-baseweb="tab-panel"] {{ padding-top: 20px; }}
+/* Tab bar (Streamlit 1.66 tabs): 48 px targets, 16 px labels, 22 px icons, 32 px between tabs */
+[data-testid="stTabs"] [role="tablist"] {{ gap: 32px; }}
+[data-testid="stTab"] {{ min-height: 48px; padding: 0 4px; }}
+[data-testid="stTab"] p {{ display: inline-flex; align-items: center; gap: 8px; font-size: 1rem; font-weight: 700; }}
+[data-testid="stTab"] p span[role="img"] {{ font-size: 1.375rem; }}
+[data-testid="stTab"][aria-selected="true"] p {{ font-weight: 800; }}
+[data-testid="stTabPanel"] {{ padding-top: 24px; }}
 [data-testid="stMain"] [data-testid="stVerticalBlock"] {{ gap: 1.1rem; }}
 [data-testid="stMain"] [data-testid="stRadio"] [role="radiogroup"] {{ gap: 10px; }}
 [data-testid="stMain"] [data-testid="stMetric"] {{
@@ -93,8 +98,6 @@ CSS = f"""
 [data-testid="stMain"] h3 {{ font-size: 1.3rem; font-weight: 800; padding-top: 1.4rem; }}
 [data-testid="stMain"] h4 {{ font-size: 1.05rem; font-weight: 800; padding-top: 0.6rem; }}
 [data-testid="stHeaderActionElements"] {{ display: none; }}
-[data-baseweb="tab"] {{ font-weight: 700; }}
-[data-baseweb="tab"][aria-selected="true"] p {{ color: inherit; }}
 </style>
 """
 
