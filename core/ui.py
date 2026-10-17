@@ -6,6 +6,7 @@ no eyebrow labels, status always carries text, WCAG AA contrast on every text/ba
 Custom colors are translucent tints, so the same CSS works in the light and the dark theme; the header
 keeps its own deep-sea colors in both.
 """
+from html import escape
 from urllib.parse import quote
 
 import streamlit as st
@@ -57,10 +58,17 @@ CSS = f"""
   background-repeat: no-repeat, no-repeat;
   background-position: right 2% center, center;
   background-size: auto 92%, 100% 100%;
-  border-radius: 16px; padding: 6px 24px 22px;
+  border-radius: 16px; padding: 2px 24px 18px; gap: 0.35rem;
 }}
-.st-key-hero h1 {{ color: #FFFFFF; font-weight: 800; font-size: 2.1rem; letter-spacing: -0.02em; }}
+.st-key-hero h1 {{ color: #FFFFFF; font-weight: 800; font-size: 1.9rem; letter-spacing: -0.02em; padding-bottom: 0.2rem; }}
 .st-key-hero p {{ color: #D5EAE7; margin: 0; max-width: 60ch; }}
+.marea-pills {{ display: flex; flex-wrap: wrap; gap: 8px; max-width: 70%; }}
+.marea-pill {{
+  display: inline-flex; align-items: center; gap: 7px; padding: 4px 12px; border-radius: 999px;
+  background: rgba(4, 22, 36, 0.45); color: #F4FBFA; font-size: 0.85rem; font-variant-numeric: tabular-nums;
+}}
+.marea-dot {{ width: 8px; height: 8px; border-radius: 50%; display: inline-block; }}
+@media (max-width: 760px) {{ .marea-pills {{ max-width: 100%; }} }}
 .st-key-hero [data-testid="stIconMaterial"] {{ color: #8FD3C9; }}
 @media (max-width: 760px) {{
   .st-key-hero {{ background-image: url("{_uri(WAVES)}"); background-size: 100% 100%; }}
@@ -83,13 +91,17 @@ def inject_css():
     st.markdown(CSS, unsafe_allow_html=True)
 
 
-def header(model_connected, model_name, seller, lang="en"):
-    with st.container(key="hero"):
+def header(box, pills, lang="en"):
+    """Compact header. pills: [(dot color or None, text)], live numbers from the session."""
+    spans = "".join(
+        f'<span class="marea-pill">'
+        + (f'<span class="marea-dot" style="background:{dot}"></span>' if dot else "")
+        + f"{escape(text)}</span>"
+        for dot, text in pills)
+    with box.container(key="hero"):
         st.title(":material/waves: Marea", anchor=False)
         st.markdown(t("tagline", lang))
-        status = (":material/memory: " + t("model_on", lang, model=model_name) if model_connected
-                  else ":material/cloud_off: " + t("model_off", lang))
-        st.markdown(f"{status} {t('demo_seller', lang, seller=seller)}")
+        st.markdown(f'<div class="marea-pills">{spans}</div>', unsafe_allow_html=True)
 
 
 def decide_card(reasons, lang="en"):

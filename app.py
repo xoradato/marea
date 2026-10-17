@@ -120,7 +120,7 @@ def t(key, **kw):
     return i18n.t(key, lang, **kw)
 
 
-ui.header(llm.is_configured(), llm.model_name(), settings["business_name"], lang)
+header_box = st.container()  # filled at the end, once today's numbers are known
 
 with st.sidebar:
     st.subheader(":material/tune: " + t("controls"))
@@ -189,6 +189,9 @@ sold = inventory["product_id"].map(st.session_state.sold).fillna(0)
 inventory = inventory.assign(stock_lbs=(inventory["product_id"].map(e["stock_lbs"]) - sold).clip(lower=0))
 table = analytics.product_table(catalog, sales, inventory, as_of, hours_ahead, lang)
 rows = table.set_index("product_id")
+overhead = settings["daily_overhead"]
+fish_capital = float((e["stock_lbs"] * e["unit_cost"]).sum())  # fish on ice this morning, at cost
+capital = fish_capital + overhead["ice"] + overhead["fuel"]
 
 
 def record_order(lines, zone, when, prep="whole", payment="cash"):
@@ -457,11 +460,8 @@ with tab_dash:
     st.caption(t("session_caption"))
 
     st.subheader(t("cava_title"))
-    fish = float((e["stock_lbs"] * e["unit_cost"]).sum())  # fish on ice this morning, at cost
-    over = settings["daily_overhead"]
-    capital = fish + over["ice"] + over["fuel"]
     sold_today = sum(x["revenue"] for x in orders)
-    parts = {"fish": f"{fish:,.0f}", "ice": over["ice"], "fuel": over["fuel"]}
+    parts = {"fish": f"{fish_capital:,.0f}", "ice": overhead["ice"], "fuel": overhead["fuel"]}
     st.progress(min(sold_today / capital, 1.0),
                 text=t("cava_progress", sold=f"{sold_today:,.0f}", capital=f"{capital:,.0f}",
                        pct=f"{sold_today / capital:.0%}"))
@@ -555,6 +555,16 @@ with tab_recs:
                            + (f" · {res.seconds:.1f} s" if res.seconds else "") + t("flash_caption"))
                 if res.error:
                     st.warning(t("flash_failed", e=res.error))
+
+sold_now = sum(x["revenue"] for x in st.session_state.orders)
+lots_to_act = int((table["action"] != "OK").sum())
+ui.header(header_box, [
+    ("#7FD1C7", t("pill_model_on", model=llm.model_name())) if llm.is_configured()
+    else ("#F2A541", t("pill_model_off")),
+    (None, t("pill_cash", sold=f"{sold_now:,.0f}", capital=f"{capital:,.0f}", pct=f"{sold_now / capital:.0%}")),
+    ("#F2A541", t("pill_lots", n=lots_to_act)) if lots_to_act else ("#7FD1C7", t("pill_lots_none")),
+    (None, t("pill_demo", seller=settings["business_name"])),
+], lang)
 
 with metrics_box:
     drafted = len(st.session_state.log)

@@ -26,10 +26,17 @@ TEXT = {
     "replies_drafted": ("Replies drafted", "Respuestas redactadas"),
     "est_time_saved": ("Estimated time saved", "Tiempo ahorrado estimado"),
     # Header
-    "tagline": ("Drafts replies to buyers on WhatsApp and Marketplace, flags the deals you should decide "
-                "yourself, and tells you what to sell before it spoils.",
-                "Redacta respuestas a compradores de WhatsApp y Marketplace, le avisa qué tratos debe decidir "
-                "usted y le dice qué vender antes de que se eche a perder."),
+    "tagline": ("Answers buyers on WhatsApp and Marketplace, flags the deals you should decide, and sells "
+                "before it spoils.",
+                "Responde a compradores de WhatsApp y Marketplace, le avisa qué tratos decidir y vende antes "
+                "de que se pierda."),
+    "pill_model_on": ("Replies by {model} on AMD GPUs", "Respuestas de {model} en GPUs AMD"),
+    "pill_model_off": ("AMD model not connected: templates", "Modelo de AMD sin conectar: plantillas"),
+    "pill_cash": ("Today: L {sold} of L {capital} back ({pct})", "Hoy: L {sold} de L {capital} recuperados ({pct})"),
+    "pill_lots": ("{n} lots need action", "{n} lotes requieren acción"),
+    "pill_lots_none": ("No lot needs action", "Ningún lote requiere acción"),
+    "pill_demo": ("Demo seller {seller} (fictional), synthetic data",
+                  "Vendedor de demostración {seller} (ficticio), datos sintéticos"),
     "model_on": ("Replies drafted by **{model}** on AMD GPUs.", "Respuestas redactadas por **{model}** en GPUs AMD."),
     "model_off": ("AMD model not connected yet: replies use offline templates.",
                   "Modelo de AMD aún sin conectar: las respuestas usan plantillas."),
