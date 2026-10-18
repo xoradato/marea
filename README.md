@@ -11,6 +11,7 @@ The seller always decides.
 <br>
 
 [![Live demo](https://img.shields.io/badge/Live_demo-marea--copilot.streamlit.app-0C6E7A?style=for-the-badge&logo=streamlit&logoColor=white)](https://marea-copilot.streamlit.app/)
+[![Demo video](https://img.shields.io/badge/Demo_video-3_min-FF0000?style=for-the-badge&logo=youtube&logoColor=white)](https://youtu.be/00zHCO9_4FU)
 [![Pitch deck](https://img.shields.io/badge/Pitch_deck-PDF-0B3C5D?style=for-the-badge&logo=adobeacrobatreader&logoColor=white)](slides/marea-deck.pdf)
 
 ![AMD Token Factory](https://img.shields.io/badge/LLM-AMD_Token_Factory-ED1C24?style=flat-square&logo=amd&logoColor=white)
@@ -227,7 +228,7 @@ marea/
 
 **Marea** · *Sell before it spoils.*
 
-[Live demo](https://marea-copilot.streamlit.app/) · [Pitch deck](slides/marea-deck.pdf) · [Animated deck](slides/marea-deck.html)
+[Live demo](https://marea-copilot.streamlit.app/) · [Demo video](https://youtu.be/00zHCO9_4FU) · [Pitch deck](slides/marea-deck.pdf) · [Animated deck](slides/marea-deck.html)
 
 <sub>Sea turtle icon: <a href="https://www.iconsdb.com/white-icons/turtle-icon.html">iconsDB.com</a>, CC0 1.0, faded and hosted in this repo. Code under the <a href="LICENSE">MIT License</a>.</sub>
 
